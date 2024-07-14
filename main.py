@@ -41,14 +41,11 @@ __email__ = 'alexander.wendt@gmx.at'
 __status__ = 'Experimental'
 
 parser = argparse.ArgumentParser(description='Schelling Model Modified')
-# parser.add_argument("-l", "--load_store", action='store_true', help="Load existing store", required=False)
-
-# CONSTANTS #
-# STORAGE_PATH = "./database/vectorstore.pkl"
-# RESOURCE_PATH = "./resources"
-# OUTPUT_PATH = "./output"
-# AIMODEL = "gpt-3.5-turbo"
-# EMBEDDINGSMODEL = "text-embedding-3-large"
+parser.add_argument("-r", "--run_simulation", action='store_true', help="Run simulation with default parameters", required=False)
+parser.add_argument("--population_size", help="Population size", type=int, default=2500, required=False)
+parser.add_argument("--empty_ratio", help="Empty houses ratio", type=float, default=0.2, required=False)
+parser.add_argument("--similarity_threshold", help="Similarity threshold", type=float, default=0.4, required=False)
+parser.add_argument("--iterations", help="Number of iterations", type=int, default=10, required=False)
 
 args = parser.parse_args()
 
@@ -76,7 +73,8 @@ class Schelling:
         for (row, col), value in np.ndenumerate(self.city):
             race = self.city[row, col]
             if race != 0:
-                neighborhood = self.city[row - self.n_neighbors:row + self.n_neighbors,
+                neighborhood = self.city[
+                               row - self.n_neighbors:row + self.n_neighbors,
                                col - self.n_neighbors:col + self.n_neighbors]
                 neighborhood_size = np.size(neighborhood)
                 n_empty_houses = len(np.nonzero(neighborhood == 0)[0])
@@ -111,55 +109,60 @@ class Schelling:
 if __name__ == "__main__":
     st.title("Schelling's Model of Segregation")
 
-    population_size = st.sidebar.slider("Population Size", 500, 10000, 2500)
-    empty_ratio = st.sidebar.slider("Empty Houses Ratio", 0., 1., .2)
-    similarity_threshold = st.sidebar.slider("Similarity Threshold", 0., 1., .4)
-    n_iterations = st.sidebar.number_input("Number of Iterations", 10)
-
-    schelling = Schelling(population_size, empty_ratio, similarity_threshold, 3)
-    mean_similarity_ratio = []
-    mean_similarity_ratio.append(schelling.get_mean_similarity_ratio())
-
-    # Plot the graphs at initial stage
-    plt.style.use("ggplot")
-    plt.figure(figsize=(8, 4))
-
-    # Left hand side graph with Schelling simulation plot
-    cmap = ListedColormap(['red', 'white', 'royalblue'])
-    plt.subplot(121)
-    plt.axis('off')
-    plt.pcolor(schelling.city, cmap=cmap, edgecolors='w', linewidths=1)
-
-    # Right hand side graph with Mean Similarity Ratio graph
-    plt.subplot(122)
-    plt.xlabel("Iterations")
-    plt.xlim([0, n_iterations])
-    plt.ylim([0.4, 1])
-    plt.title("Mean Similarity Ratio", fontsize=15)
-    plt.text(1, 0.95, "Similarity Ratio: %.4f" % schelling.get_mean_similarity_ratio(), fontsize=10)
-
-    city_plot = st.pyplot(plt)
-
-    progress_bar = st.progress(0)
-
-    if st.sidebar.button('Run Simulation'):
-        for i in range(n_iterations):
+    if args.run_simulation:
+        schelling = Schelling(args.population_size, args.empty_ratio, args.similarity_threshold, 3)
+        for i in range(args.iterations):
             schelling.run()
-            mean_similarity_ratio.append(schelling.get_mean_similarity_ratio())
-            plt.figure(figsize=(8, 4))
+    else:
+        population_size = st.sidebar.slider("Population Size", 9, 10000, 2500)
+        empty_ratio = st.sidebar.slider("Empty Houses Ratio", 0., 1., .2)
+        similarity_threshold = st.sidebar.slider("Similarity Threshold", 0., 1., .4)
+        n_iterations = st.sidebar.number_input("Number of Iterations", 10)
 
-            plt.subplot(121)
-            plt.axis('off')
-            plt.pcolor(schelling.city, cmap=cmap, edgecolors='w', linewidths=1)
+        schelling = Schelling(population_size, empty_ratio, similarity_threshold, 3)
 
-            plt.subplot(122)
-            plt.xlabel("Iterations")
-            plt.xlim([0, n_iterations])
-            plt.ylim([0.4, 1])
-            plt.title("Mean Similarity Ratio", fontsize=15)
-            plt.plot(range(1, len(mean_similarity_ratio) + 1), mean_similarity_ratio)
-            plt.text(1, 0.95, "Similarity Ratio: %.4f" % schelling.get_mean_similarity_ratio(), fontsize=10)
+        mean_similarity_ratio = [schelling.get_mean_similarity_ratio()]
 
-            city_plot.pyplot(plt)
-            plt.close("all")
-            progress_bar.progress((i + 1.) / n_iterations)
+        # Plot the graphs at initial stage
+        plt.style.use("ggplot")
+        plt.figure(figsize=(8, 4))
+
+        # Left hand side graph with Schelling simulation plot
+        cmap = ListedColormap(['red', 'white', 'royalblue'])
+        plt.subplot(121)
+        plt.axis('off')
+        plt.pcolor(schelling.city, cmap=cmap, edgecolors='w', linewidths=1)
+
+        # Right hand side graph with Mean Similarity Ratio graph
+        plt.subplot(122)
+        plt.xlabel("Iterations")
+        plt.xlim([0, n_iterations])
+        plt.ylim([0.4, 1])
+        plt.title("Mean Similarity Ratio", fontsize=15)
+        plt.text(1, 0.95, "Similarity Ratio: %.4f" % schelling.get_mean_similarity_ratio(), fontsize=10)
+
+        city_plot = st.pyplot(plt)
+
+        progress_bar = st.progress(0)
+
+        if st.sidebar.button('Run Simulation'):
+            for i in range(n_iterations):
+                schelling.run()
+                mean_similarity_ratio.append(schelling.get_mean_similarity_ratio())
+                plt.figure(figsize=(8, 4))
+
+                plt.subplot(121)
+                plt.axis('off')
+                plt.pcolor(schelling.city, cmap=cmap, edgecolors='w', linewidths=1)
+
+                plt.subplot(122)
+                plt.xlabel("Iterations")
+                plt.xlim([0, n_iterations])
+                plt.ylim([0.4, 1])
+                plt.title("Mean Similarity Ratio", fontsize=15)
+                plt.plot(range(1, len(mean_similarity_ratio) + 1), mean_similarity_ratio)
+                plt.text(1, 0.95, "Similarity Ratio: %.4f" % schelling.get_mean_similarity_ratio(), fontsize=10)
+
+                city_plot.pyplot(plt)
+                plt.close("all")
+                progress_bar.progress((i + 1.) / n_iterations)
