@@ -20,10 +20,13 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+run with streamlit run main.py
 '''
 
 import argparse
 import logging
+import math
 import random
 import numpy as np
 import streamlit as st
@@ -40,6 +43,8 @@ __maintainer__ = 'Alexander Wendt'
 __email__ = 'alexander.wendt@gmx.at'
 __status__ = 'Experimental'
 
+from City import City
+
 parser = argparse.ArgumentParser(description='Schelling Model Modified')
 parser.add_argument("-r", "--run_simulation", action='store_true', help="Run simulation with default parameters", required=False)
 parser.add_argument("--population_size", help="Population size", type=int, default=2500, required=False)
@@ -54,26 +59,67 @@ log = logging.getLogger(__name__)
 
 log.info(args)
 
+city_map = np.array([[1, 2, 0, 2, 1], [1, 2, 0, 2, 1], [1, 2, 0, 2, 1], [1, 2, 0, 2, 1]])
+
+mental_values_std_dev = 0.3
+mental_values_map = {1: [-1, -1], 2: [1, 1], 3: [0, 0,]}
+
+
+def calulate_similarity_to_nehighbor(vector1, vector2):
+    '''
+    Calculate euclidian distance to neighbor
+
+    :return:
+    '''
+
+    return np.linalg.norm(np.array(vector1) - np.array(vector2))
+
 
 class Schelling:
 
     def __init__(self, size, empty_ratio, similarity_threshold, n_neighbors):
-        self.size = size
-        self.empty_ratio = empty_ratio
-        self.similarity_threshold = similarity_threshold
+        self.races = [1, 2, 0] #races 1 and 2 and 0 is empty places
         self.n_neighbors = n_neighbors
+        self.similarity_threshold=similarity_threshold
 
-        # Ratio of races (-1, 1) and empty houses (0)
-        p = [(1 - empty_ratio) / 2, (1 - empty_ratio) / 2, empty_ratio]
-        city_size = int(np.sqrt(self.size)) ** 2
-        self.city = np.random.choice([-1, 1, 0], size=city_size, p=p)
-        self.city = np.reshape(self.city, (int(np.sqrt(city_size)), int(np.sqrt(city_size))))
+        self.city = City()
+        self.city.set_map(city_map)
+        #self.city.generate_map(size, empty_ratio, self.races)
+        self.city.instantiate_city(mental_values_map, mental_values_std_dev)
+
+        log.info("City: \n{}".format(self.city.city))
+
+
+    # def __init__(self, size, empty_ratio, similarity_threshold, n_neighbors):
+    #     self.size = size
+    #     self.empty_ratio = empty_ratio
+    #     self.similarity_threshold = similarity_threshold
+    #     self.n_neighbors = n_neighbors
+    #
+    #     # Ratio of races (-1, 1) and empty houses (0)
+    #     p = [(1 - empty_ratio) / 2, (1 - empty_ratio) / 2, empty_ratio]
+    #     city_size = int(np.sqrt(self.size)) ** 2
+    #     self.city = np.random.default_rng(0).choice([-1, 1, 0], size=city_size, p=p)
+    #     self.city = np.reshape(self.city, (int(np.sqrt(city_size)), int(np.sqrt(city_size))))
+
+    def calculate_happyness(self):
+        '''
+
+        :return:
+        '''
+
+    def get_neighbors(self):
+        '''
+
+        :return:
+        '''
+
 
     def run(self):
-        for (row, col), value in np.ndenumerate(self.city):
-            race = self.city[row, col]
+        for (row, col), value in np.ndenumerate(self.city.city):
+            race = self.city.city[row, col]
             if race != 0:
-                neighborhood = self.city[
+                neighborhood = self.city.city[
                                row - self.n_neighbors:row + self.n_neighbors,
                                col - self.n_neighbors:col + self.n_neighbors]
                 neighborhood_size = np.size(neighborhood)
@@ -85,8 +131,8 @@ class Schelling:
                     if is_unhappy:
                         empty_houses = list(zip(np.nonzero(self.city == 0)[0], np.nonzero(self.city == 0)[1]))
                         random_house = random.choice(empty_houses)
-                        self.city[random_house] = race
-                        self.city[row, col] = 0
+                        self.city.city[random_house] = race
+                        self.city.city[row, col] = 0
 
     def get_mean_similarity_ratio(self):
         count = 0
@@ -111,6 +157,9 @@ if __name__ == "__main__":
 
     if args.run_simulation:
         schelling = Schelling(args.population_size, args.empty_ratio, args.similarity_threshold, 3)
+
+
+
         for i in range(args.iterations):
             schelling.run()
     else:
