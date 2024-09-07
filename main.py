@@ -43,10 +43,13 @@ __maintainer__ = 'Alexander Wendt'
 __email__ = 'alexander.wendt@gmx.at'
 __status__ = 'Experimental'
 
+from Agent import Agent
 from City import City
+from Feature import FeatureType
 
 parser = argparse.ArgumentParser(description='Schelling Model Modified')
-parser.add_argument("-r", "--run_simulation", action='store_true', help="Run simulation with default parameters", required=False)
+parser.add_argument("-r", "--run_simulation", action='store_true', help="Run simulation with default parameters",
+                    required=False)
 parser.add_argument("--population_size", help="Population size", type=int, default=2500, required=False)
 parser.add_argument("--empty_ratio", help="Empty houses ratio", type=float, default=0.2, required=False)
 parser.add_argument("--similarity_threshold", help="Similarity threshold", type=float, default=0.4, required=False)
@@ -59,36 +62,31 @@ log = logging.getLogger(__name__)
 
 log.info(args)
 
-city_map = np.array([[1, 2, 0, 2, 1], [1, 2, 0, 2, 1], [1, 2, 0, 2, 1], [1, 2, 0, 2, 1]])
+city_map = np.array([[1, 0, 0, 2, 1], [1, 2, 0, 2, 1], [1, 2, 0, 2, 1], [1, 2, 0, 2, 1]])
 
-mental_values_std_dev = 0.3
-mental_values_map = {1: [-1, -1], 2: [1, 1], 3: [0, 0,]}
-
-
-def calulate_similarity_to_nehighbor(vector1, vector2):
-    '''
-    Calculate euclidian distance to neighbor
-
-    :return:
-    '''
-
-    return np.linalg.norm(np.array(vector1) - np.array(vector2))
+n_neighbors = 3
+mental_values_std_dev = 0.0
+mental_values_map = {1: [-1, -1], 2: [1, 1], 3: [0, 0, ]}
 
 
 class Schelling:
 
-    def __init__(self, size, empty_ratio, similarity_threshold, n_neighbors):
-        self.races = [1, 2, 0] #races 1 and 2 and 0 is empty places
+    def __init__(self, size, empty_ratio, similarity_threshold, n_neighbors, load_map: bool):
+        self.races = [1, 2, 0]  # races 1 and 2 and 0 is empty places
         self.n_neighbors = n_neighbors
-        self.similarity_threshold=similarity_threshold
+        self.similarity_threshold = similarity_threshold
 
         self.city = City()
-        self.city.set_map(city_map)
-        #self.city.generate_map(size, empty_ratio, self.races)
-        self.city.instantiate_city(mental_values_map, mental_values_std_dev)
+
+        if load_map:
+            self.city.set_map(city_map)
+        else:
+            self.city.generate_map(size, empty_ratio, self.races)
+
+        self.city.instantiate_city(mental_values_map, mental_values_std_dev, self.similarity_threshold)
 
         log.info("City: \n{}".format(self.city.city))
-
+        log.info("Team map: \n{}".format(self.city.get_team_map()))
 
     # def __init__(self, size, empty_ratio, similarity_threshold, n_neighbors):
     #     self.size = size
@@ -102,53 +100,27 @@ class Schelling:
     #     self.city = np.random.default_rng(0).choice([-1, 1, 0], size=city_size, p=p)
     #     self.city = np.reshape(self.city, (int(np.sqrt(city_size)), int(np.sqrt(city_size))))
 
-    def calculate_happyness(self):
-        '''
-
-        :return:
-        '''
-
-    def get_neighbors(self):
-        '''
-
-        :return:
-        '''
-
-
     def run(self):
         for (row, col), value in np.ndenumerate(self.city.city):
-            race = self.city.city[row, col]
-            if race != 0:
-                neighborhood = self.city.city[
-                               row - self.n_neighbors:row + self.n_neighbors,
-                               col - self.n_neighbors:col + self.n_neighbors]
-                neighborhood_size = np.size(neighborhood)
-                n_empty_houses = len(np.nonzero(neighborhood == 0)[0])
-                if neighborhood_size != n_empty_houses + 1:
-                    n_similar = len(np.nonzero(neighborhood == race)[0]) - 1
-                    similarity_ratio = n_similar / (neighborhood_size - n_empty_houses - 1.)
-                    is_unhappy = (similarity_ratio < self.similarity_threshold)
-                    if is_unhappy:
-                        empty_houses = list(zip(np.nonzero(self.city == 0)[0], np.nonzero(self.city == 0)[1]))
-                        random_house = random.choice(empty_houses)
-                        self.city.city[random_house] = race
-                        self.city.city[row, col] = 0
+            feature = self.city.city[row, col]
+            if feature.type == FeatureType.HOUSE and feature.agent is not None:
+                current_agent: Agent = feature.agent
+                log.debug("Processing feature: {}".format(feature))
+                # Get all plots in the neighborhood
+                neighborhood = self.city.get_neighbors(row, col, self.n_neighbors)
+                log.debug("Neighborhood: {}".format(neighborhood))
+                is_unhappy = current_agent.is_unhappy(neighborhood)
 
-    def get_mean_similarity_ratio(self):
-        count = 0
-        similarity_ratio = 0
-        for (row, col), value in np.ndenumerate(self.city):
-            race = self.city[row, col]
-            if race != 0:
-                neighborhood = self.city[row - self.n_neighbors:row + self.n_neighbors,
-                               col - self.n_neighbors:col + self.n_neighbors]
-                neighborhood_size = np.size(neighborhood)
-                n_empty_houses = len(np.nonzero(neighborhood == 0)[0])
-                if neighborhood_size != n_empty_houses + 1:
-                    n_similar = len(np.nonzero(neighborhood == race)[0]) - 1
-                    similarity_ratio += n_similar / (neighborhood_size - n_empty_houses - 1.)
-                    count += 1
-        return similarity_ratio / count
+                if is_unhappy:
+                    random_house_position = self.city.get_random_empty_house_position()
+                    self.city.city[random_house_position[0], random_house_position[1]].agent = feature.agent
+                    self.city.city[row, col].agent = None
+                    log.debug("Agent {} is unhappy. Move from {} to {}".format(current_agent, [row, col],
+                                                                               random_house_position))
+                else:
+                    log.debug("Agent {} is happy. Do nothing".format(current_agent))
+            else:
+                log.debug("Feature {} is not a house or house is empty".format(feature))
 
 
 # Streamlit App
@@ -156,9 +128,7 @@ if __name__ == "__main__":
     st.title("Schelling's Model of Segregation")
 
     if args.run_simulation:
-        schelling = Schelling(args.population_size, args.empty_ratio, args.similarity_threshold, 3)
-
-
+        schelling = Schelling(args.population_size, args.empty_ratio, args.similarity_threshold, 1, True)
 
         for i in range(args.iterations):
             schelling.run()
@@ -168,9 +138,9 @@ if __name__ == "__main__":
         similarity_threshold = st.sidebar.slider("Similarity Threshold", 0., 1., .4)
         n_iterations = st.sidebar.number_input("Number of Iterations", 10)
 
-        schelling = Schelling(population_size, empty_ratio, similarity_threshold, 3)
+        schelling = Schelling(population_size, empty_ratio, similarity_threshold, n_neighbors, False)
 
-        mean_similarity_ratio = [schelling.get_mean_similarity_ratio()]
+        mean_similarity_ratio = [schelling.city.get_mean_similarity_ratio(n_neighbors)]
 
         # Plot the graphs at initial stage
         plt.style.use("ggplot")
@@ -180,7 +150,7 @@ if __name__ == "__main__":
         cmap = ListedColormap(['red', 'white', 'royalblue'])
         plt.subplot(121)
         plt.axis('off')
-        plt.pcolor(schelling.city, cmap=cmap, edgecolors='w', linewidths=1)
+        plt.pcolor(schelling.city.get_team_map(), cmap=cmap, edgecolors='w', linewidths=1)
 
         # Right hand side graph with Mean Similarity Ratio graph
         plt.subplot(122)
@@ -188,7 +158,7 @@ if __name__ == "__main__":
         plt.xlim([0, n_iterations])
         plt.ylim([0.4, 1])
         plt.title("Mean Similarity Ratio", fontsize=15)
-        plt.text(1, 0.95, "Similarity Ratio: %.4f" % schelling.get_mean_similarity_ratio(), fontsize=10)
+        plt.text(1, 0.95, "Similarity Ratio: %.4f" % schelling.city.get_mean_similarity_ratio(n_neighbors), fontsize=10)
 
         city_plot = st.pyplot(plt)
 
@@ -197,12 +167,12 @@ if __name__ == "__main__":
         if st.sidebar.button('Run Simulation'):
             for i in range(n_iterations):
                 schelling.run()
-                mean_similarity_ratio.append(schelling.get_mean_similarity_ratio())
+                mean_similarity_ratio.append(schelling.city.get_mean_similarity_ratio(n_neighbors))
                 plt.figure(figsize=(8, 4))
 
                 plt.subplot(121)
                 plt.axis('off')
-                plt.pcolor(schelling.city, cmap=cmap, edgecolors='w', linewidths=1)
+                plt.pcolor(schelling.city.get_team_map(), cmap=cmap, edgecolors='w', linewidths=1)
 
                 plt.subplot(122)
                 plt.xlabel("Iterations")
@@ -210,7 +180,8 @@ if __name__ == "__main__":
                 plt.ylim([0.4, 1])
                 plt.title("Mean Similarity Ratio", fontsize=15)
                 plt.plot(range(1, len(mean_similarity_ratio) + 1), mean_similarity_ratio)
-                plt.text(1, 0.95, "Similarity Ratio: %.4f" % schelling.get_mean_similarity_ratio(), fontsize=10)
+                plt.text(1, 0.95, "Similarity Ratio: %.4f" % schelling.city.get_mean_similarity_ratio(n_neighbors),
+                         fontsize=10)
 
                 city_plot.pyplot(plt)
                 plt.close("all")
