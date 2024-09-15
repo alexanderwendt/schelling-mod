@@ -22,10 +22,13 @@ class Agent:
         self.similarity_threshold = similarity_threshold
 
     def get_similarity_ratio(self, neighborhood: list):
-        similarity_ratio = np.average(
-            [utils.calulate_similarity_to_nehighbor(self.mental_values, neighbor.agent.mental_values) for neighbor in
-             neighborhood]
-        )
+        if len(neighborhood) > 0:
+            similarity_ratio = np.average(
+                [utils.calulate_similarity_to_nehighbor(self.mental_values, neighbor.agent.mental_values) for neighbor in
+                 neighborhood]
+            )
+        else:
+            similarity_ratio = 1
 
         return similarity_ratio
 

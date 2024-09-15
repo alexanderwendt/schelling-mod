@@ -56,12 +56,11 @@ class City:
         :return:
         '''
         neighborhood = []
-        for i in range(row - n_neighbors, row + n_neighbors):
-            for j in range(col - n_neighbors, col + n_neighbors):
+        for i in range(row - n_neighbors, row + n_neighbors + 1):
+            for j in range(col - n_neighbors, col + n_neighbors + 1):
                 if 0 <= i < self.city.shape[0] and 0 <= j < self.city.shape[1] and [i, j] != [row, col]:
                     feature = self.city[i, j]
                     if feature.agent is not None and feature.type == FeatureType.HOUSE is not None:
-                        #neighbor_positions.append([i, j])
                         neighborhood.append(feature)
 
         return neighborhood

@@ -26,5 +26,5 @@ class Feature:
         if self.agent is not None:
             value = f"({self.type.value}, pos={self.position}, a={self.agent})"
         else:
-            value = f"({self.type.name}, pos={self.position}, aid=None)"
+            value = f"({self.type.value}, pos={self.position}, aid=None)"
         return value
