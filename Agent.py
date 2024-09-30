@@ -37,7 +37,7 @@ class Agent:
 
         :return:
         '''
-        is_unhappy = (self.get_similarity_ratio(neighborhood) > self.similarity_threshold)
+        is_unhappy = (self.get_similarity_ratio(neighborhood) < self.similarity_threshold)
 
         return is_unhappy
 

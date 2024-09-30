@@ -7,4 +7,4 @@ def calulate_similarity_to_nehighbor(vector1, vector2):
     :return:
     '''
 
-    return np.linalg.norm(np.array(vector1) - np.array(vector2))
+    return 1 - np.linalg.norm(np.array(vector1) - np.array(vector2))

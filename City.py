@@ -87,7 +87,7 @@ class City:
                 neighborhood = self.get_neighbors(i, j, n_neighbors)
                 similarities.append(feature.agent.get_similarity_ratio(neighborhood))
 
-        return 1-np.average(similarities) #0: all are the same, 1: all are completly different
+        return np.average(similarities) #0: all are the same, 1: all are completly different
 
     def __repr__(self):
         return "City"
