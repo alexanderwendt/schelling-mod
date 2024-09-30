@@ -12,8 +12,13 @@ class City:
     def set_map(self, city_map: np.ndarray):
         self.raw_map = city_map
 
-    def generate_map(self, size: int, empty_ratio: float, races: list[int]):
-        p = [(1 - empty_ratio) / 2, (1 - empty_ratio) / 2, empty_ratio]
+    def generate_map(self, size: int, empty_ratio: float, races: list[int], teams_distribution: dict):
+        p = [empty_ratio]
+        if teams_distribution is not None:
+            p.extend(np.array(list(teams_distribution.values()))*(1-empty_ratio))
+        else:
+            p.extend(([((1 - empty_ratio) / (len(races) - 1)) for _ in range(len(races) - 1)]))
+
         city_size = int(np.sqrt(size)) ** 2
 
         raw_map_preparation = np.random.default_rng(0).choice(races, size=city_size, p=p)
@@ -82,7 +87,7 @@ class City:
                 neighborhood = self.get_neighbors(i, j, n_neighbors)
                 similarities.append(feature.agent.get_similarity_ratio(neighborhood))
 
-        return np.average(similarities)
+        return 1-np.average(similarities) #0: all are the same, 1: all are completly different
 
     def __repr__(self):
         return "City"

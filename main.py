@@ -62,7 +62,7 @@ log = logging.getLogger(__name__)
 
 log.info(args)
 
-#city_map = np.array([[1, 0, 0, 2, 1], [1, 2, 0, 2, 1], [1, 2, 0, 2, 1], [1, 2, 0, 2, 1]])
+# city_map = np.array([[1, 0, 0, 2, 1], [1, 2, 0, 2, 1], [1, 2, 0, 2, 1], [1, 2, 0, 2, 1]])
 city_map = np.array([[1, 1, 1, 0, 0],
                      [1, 2, 1, 2, 1],
                      [1, 1, 1, 1, 2],
@@ -71,13 +71,17 @@ city_map = np.array([[1, 1, 1, 0, 0],
 
 n_neighbors = 2
 mental_values_std_dev = 0.0
-mental_values_map = {1: [0, 0], 2: [0.707, 0.707], 3: [0.2, 0]}
+mental_values_map = {1: [0, 0], 2: [0.2, 0.2], 3: [0.707, 0.707]}
+team_names = {1: "Knights", 2: "Elves", 3: "Orcs"}
+teams_distribution = {1: 0.8, 2: 0.1, 3: 0.1}  # Distribution of the teams
 
 
 class Schelling:
 
-    def __init__(self, size, empty_ratio, similarity_threshold, n_neighbors, load_map: bool):
-        self.races = [1, 2, 0]  # races 1 and 2 and 0 is empty places
+    def __init__(self, size, empty_ratio, similarity_threshold, n_neighbors, load_map: bool, races=2,
+                 teams_distribution: dict = None):
+        # self.races = [1, 2, 3, 0]  # races 1 and 2 and 0 is empty places
+        self.races = np.arange(races + 1)
         self.n_neighbors = n_neighbors
         self.similarity_threshold = similarity_threshold
 
@@ -86,7 +90,7 @@ class Schelling:
         if load_map:
             self.city.set_map(city_map)
         else:
-            self.city.generate_map(size, empty_ratio, self.races)
+            self.city.generate_map(size, empty_ratio, self.races, teams_distribution)
 
         self.city.instantiate_city(mental_values_map, mental_values_std_dev, self.similarity_threshold)
 
@@ -121,7 +125,8 @@ if __name__ == "__main__":
     st.title("Schelling's Model of Segregation")
 
     if args.run_simulation:
-        schelling = Schelling(args.population_size, args.empty_ratio, args.similarity_threshold, 1, True)
+        schelling = Schelling(args.population_size, args.empty_ratio, args.similarity_threshold, 1, False,
+                              len(mental_values_map), teams_distribution)
 
         for i in range(args.iterations):
             schelling.run()
@@ -132,7 +137,8 @@ if __name__ == "__main__":
         similarity_threshold = st.sidebar.slider("Similarity Threshold", 0., 1., .3)
         n_iterations = st.sidebar.number_input("Number of Iterations", 10)
 
-        schelling = Schelling(population_size, empty_ratio, similarity_threshold, n_neighbors, False)
+        schelling = Schelling(population_size, empty_ratio, similarity_threshold, n_neighbors, False,
+                              len(mental_values_map), teams_distribution)
 
         mean_similarity_ratio = [schelling.city.get_mean_similarity_ratio(n_neighbors)]
 
@@ -141,7 +147,7 @@ if __name__ == "__main__":
         plt.figure(figsize=(8, 4))
 
         # Left hand side graph with Schelling simulation plot
-        cmap = ListedColormap(['white', 'red', 'royalblue'])
+        cmap = ListedColormap(['white', 'red', 'royalblue', 'green'])
         plt.subplot(121)
         plt.axis('off')
         plt.pcolor(schelling.city.get_team_map(), cmap=cmap, edgecolors='w', linewidths=1)
@@ -149,7 +155,7 @@ if __name__ == "__main__":
         # Right hand side graph with Mean Similarity Ratio graph
         plt.subplot(122)
         plt.xlabel("Iterations")
-        plt.xlim([0, n_iterations+1])
+        plt.xlim([0, n_iterations + 1])
         plt.ylim([0.0, 1])
         plt.title("Mean Similarity Ratio", fontsize=15)
         plt.text(1, 0.95, "Similarity Ratio: %.4f" % schelling.city.get_mean_similarity_ratio(n_neighbors), fontsize=10)
@@ -159,7 +165,7 @@ if __name__ == "__main__":
         progress_bar = st.progress(0)
 
         if st.sidebar.button('Run Simulation'):
-            for i in range(n_iterations+1):
+            for i in range(n_iterations + 1):
                 schelling.run()
                 mean_similarity_ratio.append(schelling.city.get_mean_similarity_ratio(n_neighbors))
                 plt.figure(figsize=(8, 4))
@@ -170,7 +176,7 @@ if __name__ == "__main__":
 
                 plt.subplot(122)
                 plt.xlabel("Iterations")
-                plt.xlim([0, n_iterations+1])
+                plt.xlim([0, n_iterations + 1])
                 plt.ylim([0.0, 1])
                 plt.title("Mean Similarity Ratio", fontsize=15)
                 plt.plot(range(1, len(mean_similarity_ratio) + 1), mean_similarity_ratio)
@@ -179,4 +185,4 @@ if __name__ == "__main__":
 
                 city_plot.pyplot(plt)
                 plt.close("all")
-                progress_bar.progress((i + 1.) / (n_iterations+1))
+                progress_bar.progress((i + 1.) / (n_iterations + 1))
