@@ -10,7 +10,31 @@ Thanks to Adil Moujahid. Blog: https://adilmoujahid.com/.
 
 ## Python Version
 
-This project is now configured for Python `3.14`.
+This project targets Python `3.11`.
+
+## Project Structure
+
+The project follows a standard Python package layout:
+
+```text
+schelling-mod/
+├── schelling_mod/
+│   ├── __init__.py
+│   ├── agent.py
+│   ├── app.py
+│   ├── city.py
+│   ├── feature.py
+│   └── utils.py
+├── environment.yml
+├── main.py
+├── pyproject.toml
+├── README.md
+└── requirements.txt
+```
+
+- `schelling_mod/` contains the application and domain logic.
+- `main.py` is a thin entry-point wrapper for Streamlit and CLI use.
+- `pyproject.toml` defines the project metadata and Python requirement.
 
 ## Dependencies
 
@@ -20,30 +44,30 @@ The runtime dependencies are:
 - `matplotlib==3.10.9`
 - `streamlit==1.56.0`
 
-These versions were selected from the current PyPI releases that support Python `3.14`.
+Install the dependencies from `requirements.txt` or `environment.yml`.
 
 ## Setup
 
 ### Option 1: Conda recommended
 
-This repository already assumes a conda environment named `schelling314`.
+This repository assumes a conda environment named `schelling311`.
 
 Activate the environment:
 
 ```powershell
-conda activate schelling314
+conda activate schelling311
 ```
 
-Install the project dependencies:
-
-```powershell
-python -m pip install -r requirements.txt
-```
-
-If you want conda to recreate the environment definition, use:
+Install or update the environment from the conda definition:
 
 ```powershell
 conda env update -f environment.yml --prune
+```
+
+Optional: install the package in editable mode:
+
+```powershell
+python -m pip install -e .
 ```
 
 ### Option 2: Pip only
@@ -52,16 +76,20 @@ If you do not want to use conda:
 
 ```powershell
 python -m pip install -r requirements.txt
+python -m pip install -e .
 ```
+
+The editable install is optional for the current workflow because `main.py` already imports the local package, but it
+is the standard approach for Python projects with package metadata.
 
 ## How To Run
 
-The main entry point is `main.py`.
+The main entry point remains `main.py`.
 
 ### Run the Streamlit app
 
 ```powershell
-conda activate schelling314
+conda activate schelling311
 streamlit run main.py
 ```
 
@@ -70,7 +98,7 @@ This starts the interactive UI in your browser.
 ### Run the simulation from the command line
 
 ```powershell
-conda activate schelling314
+conda activate schelling311
 python main.py --run_simulation
 ```
 
@@ -84,8 +112,17 @@ Optional arguments:
 Example:
 
 ```powershell
-conda activate schelling314
+conda activate schelling311
 python main.py --run_simulation --population_size 2500 --empty_ratio 0.2 --similarity_threshold 0.4 --iterations 10
+```
+
+### Run as a module
+
+You can also run the packaged app directly:
+
+```powershell
+python -m pip install -r requirements.txt
+python -m schelling_mod.app --run_simulation
 ```
 
 ## Requirements File Or YAML
@@ -99,10 +136,10 @@ Practical recommendation for this repository:
 - Keep `environment.yml` as the primary setup file.
 - Keep a small `requirements.txt` with direct Python dependencies only.
 
-## Notes
+## Validation
 
-The `schelling314` conda environment on this machine is Python `3.14.4`, but the project packages were not installed in
-that environment at the time of this update, so the application was not fully executed during verification.
+The package structure and entrypoints were checked after the refactor. In this workspace, a full runtime launch could
+not be completed because `matplotlib` is not installed in the active Python environment.
 
 ## TODOs
 
