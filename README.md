@@ -95,6 +95,32 @@ streamlit run main.py
 
 This starts the interactive UI in your browser.
 
+### Streamlit Frontend Parameters
+
+The Streamlit UI loads parameter values from `schelling_streamlit_config.json` on startup and saves the current
+sidebar values back to that file whenever the app reruns. If the file does not exist, built-in defaults are used.
+
+| Frontend property | Min | Max | Meaning |
+| --- | ---: | ---: | --- |
+| `Population Size` | `9` | `10000` | Number of grid cells requested. The generated city is truncated to the nearest lower square grid size. |
+| `Empty Houses Ratio` | `0.0` | `1.0` | Share of grid cells initialized as empty houses. |
+| `Neighborhood Radius` | `1` | `5` | Radius used for social similarity checks. Radius `1` checks the surrounding Moore neighborhood; higher values check a larger square. |
+| `Number of Iterations` | `1` | `10000` | Number of simulation steps run when `Run Simulation` is clicked. |
+| `Mental Values Std Dev` | `0.0` | `0.5` | Standard deviation for sampling each agent's cultural value vector around its group mean. |
+| `Use Property Values` | `False` | `True` | Enables property-value effects. If active, unaffordable houses make agents unhappy and unhappy agents may only move into affordable empty houses. If inactive, movement uses only social similarity and any empty house is a valid destination. |
+| `<Group> population share` | `0.0` | `100.0` | Percentage share of occupied houses assigned to that group. Shares are normalized before map generation. |
+| `<Group> threshold mean` | `0.0` | `1.0` | Mean of the group's normally distributed similarity threshold. |
+| `<Group> threshold std dev` | `0.0` | `0.5` | Standard deviation of the group's similarity threshold distribution. |
+| `<Group> income mean` | `0.0` | unbounded | Mean of the group's normally distributed income. Loaded config values are clamped to `0.0` through `100.0` before display. |
+| `<Group> income std dev` | `0.0` | unbounded | Standard deviation of the group's income distribution. Loaded config values are clamped to `0.0` through `100.0` before display. |
+| `<Group A> - <Group B>` | `0.0` | `5.0` | Pairwise cultural distance multiplier between two groups. Higher values reduce cultural similarity faster. |
+
+Current groups are:
+
+- `Knights`
+- `Elves`
+- `Orcs`
+
 ### Run the simulation from the command line
 
 ```powershell
@@ -106,15 +132,23 @@ Optional arguments:
 
 - `--population_size`
 - `--empty_ratio`
-- `--similarity_threshold`
+- `--threshold_std_dev`
 - `--iterations`
 
 Example:
 
 ```powershell
 conda activate schelling311
-python main.py --run_simulation --population_size 2500 --empty_ratio 0.2 --similarity_threshold 0.4 --iterations 10
+python main.py --run_simulation --population_size 2500 --empty_ratio 0.2 --threshold_std_dev 0.05 --iterations 10
 ```
+
+The simulation now uses:
+
+- per-group normally distributed similarity thresholds
+- pairwise cultural distance multipliers between groups
+- per-group normally distributed incomes
+- location-based house multipliers
+- affordability-based unhappiness and movement
 
 ### Run as a module
 

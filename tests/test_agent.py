@@ -15,6 +15,7 @@ def make_neighbor(team_id: int, values: list[float]) -> Feature:
         mental_values_mean=np.array(values),
         mental_values_std_dev=0.0,
         similarity_threshold=0.5,
+        income=1.0,
     )
     return Feature(FeatureType.HOUSE, [0, 0], neighbor)
 
@@ -27,6 +28,7 @@ def test_agent_similarity_ratio_defaults_to_one_without_neighbors() -> None:
         mental_values_mean=np.array([0.0, 0.0]),
         mental_values_std_dev=0.0,
         similarity_threshold=0.5,
+        income=1.0,
     )
 
     assert agent.get_similarity_ratio([]) == 1
@@ -40,10 +42,11 @@ def test_agent_is_unhappy_when_similarity_below_threshold() -> None:
         mental_values_mean=np.array([0.0, 0.0]),
         mental_values_std_dev=0.0,
         similarity_threshold=0.9,
+        income=1.0,
     )
     neighborhood = [make_neighbor(team_id=2, values=[0.2, 0.2])]
 
-    assert bool(agent.is_unhappy(neighborhood))
+    assert bool(agent.is_unhappy(neighborhood, house_value=1.0))
 
 
 def test_agent_similarity_ratio_matches_neighbor_average() -> None:
@@ -54,10 +57,42 @@ def test_agent_similarity_ratio_matches_neighbor_average() -> None:
         mental_values_mean=np.array([0.0, 0.0]),
         mental_values_std_dev=0.0,
         similarity_threshold=0.1,
+        income=1.0,
     )
     neighborhood = [
         make_neighbor(team_id=1, values=[0.0, 0.0]),
         make_neighbor(team_id=2, values=[0.2, 0.2]),
     ]
 
-    assert agent.get_similarity_ratio(neighborhood) == pytest.approx(0.8585786438)
+    assert agent.get_similarity_ratio(neighborhood) == pytest.approx(0.9292893219)
+
+
+def test_agent_is_unhappy_when_house_is_not_affordable() -> None:
+    """Economic dissatisfaction should also trigger unhappiness."""
+    agent = Agent(
+        agent_id=1,
+        team_id=1,
+        mental_values_mean=np.array([0.0, 0.0]),
+        mental_values_std_dev=0.0,
+        similarity_threshold=0.1,
+        income=1.0,
+    )
+
+    assert bool(agent.is_unhappy([], house_value=15.0))
+
+
+def test_agent_similarity_uses_pairwise_multiplier() -> None:
+    """Cultural multipliers should reduce similarity for configured pairs."""
+    agent = Agent(
+        agent_id=1,
+        team_id=1,
+        mental_values_mean=np.array([0.0, 0.0]),
+        mental_values_std_dev=0.0,
+        similarity_threshold=0.1,
+        income=1.0,
+    )
+    neighborhood = [make_neighbor(team_id=2, values=[0.2, 0.2])]
+
+    similarity = agent.get_similarity_ratio(neighborhood, {(1, 2): 2.0})
+
+    assert similarity == pytest.approx(0.7171572875)

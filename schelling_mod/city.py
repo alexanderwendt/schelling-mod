@@ -1,9 +1,12 @@
 """City grid and neighborhood logic."""
 
+from collections.abc import Mapping
+
 import numpy as np
 
 from .agent import Agent
 from .feature import Feature, FeatureType
+from . import utils
 
 
 class City:
@@ -42,30 +45,43 @@ class City:
 
     def instantiate_city(
         self,
-        agent_values: dict,
+        agent_values: Mapping[int, np.ndarray],
         agent_values_std: float,
-        similarity_threshold: float,
+        similarity_threshold_distributions: Mapping[int, tuple[float, float]],
+        income_distributions: Mapping[int, tuple[float, float]],
     ) -> None:
         """Instantiate city features and agents from the raw map."""
         self.city = np.empty(self.raw_map.shape, dtype=object)
         current_agent_id = 0
+        row_count, col_count = self.raw_map.shape
 
         for (i, j), value in np.ndenumerate(self.raw_map):
             team_id = self.raw_map[i][j].item()
+            location_multiplier = utils.calculate_location_multiplier(i, j, row_count, col_count)
 
             if team_id != 0:
+                threshold_mean, threshold_std = similarity_threshold_distributions[team_id]
+                income_mean, income_std = income_distributions[team_id]
                 agent = Agent(
                     current_agent_id,
                     team_id,
                     agent_values.get(team_id),
                     agent_values_std,
-                    similarity_threshold,
+                    utils.sample_normal_value(threshold_mean, threshold_std),
+                    utils.sample_normal_value(income_mean, income_std),
                 )
             else:
                 agent = None
 
-            self.city[i][j] = Feature(FeatureType.HOUSE, [i, j], agent)
+            self.city[i][j] = Feature(
+                FeatureType.HOUSE,
+                [i, j],
+                agent,
+                location_multiplier=location_multiplier,
+            )
             current_agent_id += 1
+
+        self.recalculate_property_values()
 
     def get_team_map(self) -> np.ndarray:
         """Return a map containing the current team ids."""
@@ -91,7 +107,11 @@ class City:
 
         return neighborhood
 
-    def get_random_empty_house_position(self) -> list[int]:
+    def get_immediate_neighbors(self, row: int, col: int) -> list:
+        """Return Moore-neighborhood occupied house features."""
+        return self.get_neighbors(row, col, 1)
+
+    def get_random_empty_house_position(self) -> list[int] | None:
         """Return the position of a random empty house."""
         empty_houses = []
         for (i, j), value in np.ndenumerate(self.city):
@@ -99,15 +119,57 @@ class City:
             if feature.type == FeatureType.HOUSE and feature.agent is None:
                 empty_houses.append([i, j])
 
+        if not empty_houses:
+            return None
+
         return empty_houses[np.random.choice(len(empty_houses))]
 
-    def get_mean_similarity_ratio(self, n_neighbors) -> float:
+    def get_affordable_empty_house_positions(self, agent: Agent) -> list[list[int]]:
+        """Return all empty house positions affordable for the given agent."""
+        affordable_houses = []
+        for (i, j), feature in np.ndenumerate(self.city):
+            if feature.type == FeatureType.HOUSE and feature.agent is None and agent.can_afford(feature.property_value):
+                affordable_houses.append([i, j])
+
+        return affordable_houses
+
+    def get_random_affordable_empty_house_position(self, agent: Agent) -> list[int] | None:
+        """Return a random affordable empty house position, if any."""
+        affordable_houses = self.get_affordable_empty_house_positions(agent)
+        if not affordable_houses:
+            return None
+
+        return affordable_houses[np.random.choice(len(affordable_houses))]
+
+    def recalculate_property_values(self) -> None:
+        """Recompute property values for all houses."""
+        for (row, col), feature in np.ndenumerate(self.city):
+            if feature.type != FeatureType.HOUSE:
+                continue
+
+            neighboring_incomes = [
+                neighbor.agent.income
+                for neighbor in self.get_immediate_neighbors(row, col)
+                if neighbor.agent is not None
+            ]
+            feature.property_value = utils.calculate_property_value(
+                neighboring_incomes,
+                feature.location_multiplier,
+            )
+
+    def get_mean_similarity_ratio(
+        self,
+        n_neighbors: int,
+        pairwise_multipliers: Mapping[tuple[int, int], float] | None = None,
+    ) -> float:
         """Return the mean similarity ratio across all occupied houses."""
         similarities = []
         for (i, j), feature in np.ndenumerate(self.city):
             if feature.type == FeatureType.HOUSE and feature.agent is not None:
                 neighborhood = self.get_neighbors(i, j, n_neighbors)
-                similarities.append(feature.agent.get_similarity_ratio(neighborhood))
+                similarities.append(
+                    feature.agent.get_similarity_ratio(neighborhood, pairwise_multipliers)
+                )
 
         return np.average(similarities)
 
