@@ -10,6 +10,8 @@ INCOME_YEARS = 20
 LOCATION_MULTIPLIER_MIN = 0.5
 LOCATION_MULTIPLIER_MAX = 1.5
 PROPERTY_VALUE_FACTOR = 0.5
+CULTURAL_SIMILARITY_WEIGHT = 1.0
+INCOME_SIMILARITY_WEIGHT = 0.0
 
 
 def sample_normal_value(mean_value: float, std_dev: float) -> float:
@@ -27,18 +29,41 @@ def calculate_similarity_to_neighbor(
     return max(0.0, similarity)
 
 
+def get_pairwise_cultural_distance(
+    team_id: int,
+    neighbor_team_id: int,
+    pairwise_distances: Mapping[tuple[int, int], float] | None,
+) -> float:
+    """Return the configured cultural distance for a team pair."""
+    if pairwise_distances is None or team_id == neighbor_team_id:
+        return 0.0
+
+    direct_key = (team_id, neighbor_team_id)
+    reverse_key = (neighbor_team_id, team_id)
+    return float(pairwise_distances.get(direct_key, pairwise_distances.get(reverse_key, 0.0)))
+
+
 def get_pairwise_cultural_multiplier(
     team_id: int,
     neighbor_team_id: int,
     pairwise_multipliers: Mapping[tuple[int, int], float] | None,
 ) -> float:
-    """Return the configured cultural multiplier for a team pair."""
-    if pairwise_multipliers is None or team_id == neighbor_team_id:
-        return 1.0
+    """Return the configured cultural distance for backward-compatible callers."""
+    return get_pairwise_cultural_distance(team_id, neighbor_team_id, pairwise_multipliers)
 
-    direct_key = (team_id, neighbor_team_id)
-    reverse_key = (neighbor_team_id, team_id)
-    return float(pairwise_multipliers.get(direct_key, pairwise_multipliers.get(reverse_key, 1.0)))
+
+def calculate_cultural_similarity(
+    team_id: int,
+    neighbor_team_id: int,
+    pairwise_distances: Mapping[tuple[int, int], float] | None = None,
+) -> float:
+    """Calculate cultural similarity directly from configured group distance."""
+    cultural_distance = get_pairwise_cultural_distance(
+        team_id,
+        neighbor_team_id,
+        pairwise_distances,
+    )
+    return max(0.0, 1 - cultural_distance)
 
 
 def calculate_income_similarity(income1: float, income2: float) -> float:
@@ -49,20 +74,23 @@ def calculate_income_similarity(income1: float, income2: float) -> float:
 
 
 def calculate_total_similarity(
-    vector1,
-    vector2,
+    team_id: int,
+    neighbor_team_id: int,
     income1: float,
     income2: float,
-    distance_multiplier: float = 1.0,
+    pairwise_distances: Mapping[tuple[int, int], float] | None = None,
 ) -> float:
-    """Average cultural and income similarity."""
-    cultural_similarity = calculate_similarity_to_neighbor(
-        vector1,
-        vector2,
-        distance_multiplier=distance_multiplier,
+    """Return weighted cultural and income similarity."""
+    cultural_similarity = calculate_cultural_similarity(
+        team_id,
+        neighbor_team_id,
+        pairwise_distances,
     )
     income_similarity = calculate_income_similarity(income1, income2)
-    return float(np.average([cultural_similarity, income_similarity]))
+    return (
+        (CULTURAL_SIMILARITY_WEIGHT * cultural_similarity)
+        + (INCOME_SIMILARITY_WEIGHT * income_similarity)
+    )
 
 
 def calculate_affordability_limit(income: float) -> float:

@@ -1,36 +1,36 @@
 {
   "pairwise_cultural_multipliers": {
-    "1-2": 0.5,
-    "1-3": 0.7,
+    "1-2": 1.2,
+    "1-3": 1.0,
     "2-3": 1.0
   },
   "simulation": {
-    "empty_ratio": 0.25,
-    "mental_values_std_dev": 0.0,
-    "n_iterations": 10,
-    "n_neighbors": 2,
-    "population_size": 90
+    "empty_ratio": 0.23,
+    "n_iterations": 50,
+    "n_neighbors": 1,
+    "population_size": 90,
+    "property_values_enabled": false
   },
   "teams": {
     "1": {
       "income_mean": 1.0,
       "income_std": 0.0,
       "population_share": 0.7,
-      "threshold_mean": 0.4,
+      "threshold_mean": 0.5,
       "threshold_std": 0.0
     },
     "2": {
       "income_mean": 1.0,
       "income_std": 0.0,
       "population_share": 0.2,
-      "threshold_mean": 0.4,
+      "threshold_mean": 0.5,
       "threshold_std": 0.0
     },
     "3": {
       "income_mean": 1.0,
       "income_std": 0.0,
       "population_share": 0.1,
-      "threshold_mean": 0.4,
+      "threshold_mean": 0.5,
       "threshold_std": 0.0
     }
   }

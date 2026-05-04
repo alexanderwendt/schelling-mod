@@ -3,6 +3,7 @@
 import pytest
 
 from schelling_mod.utils import calculate_affordability_limit
+from schelling_mod.utils import calculate_cultural_similarity
 from schelling_mod.utils import calculate_income_similarity
 from schelling_mod.utils import calculate_location_multiplier
 from schelling_mod.utils import calculate_property_value
@@ -26,11 +27,19 @@ def test_calculate_similarity_to_neighbor_uses_euclidean_distance() -> None:
 
 
 def test_get_pairwise_cultural_multiplier_is_symmetric() -> None:
-    """Pairwise multipliers should work in both lookup directions."""
+    """Pairwise cultural distances should work in both lookup directions."""
     multipliers = {(1, 2): 1.2}
 
     assert get_pairwise_cultural_multiplier(1, 2, multipliers) == pytest.approx(1.2)
     assert get_pairwise_cultural_multiplier(2, 1, multipliers) == pytest.approx(1.2)
+
+
+def test_calculate_cultural_similarity_uses_pairwise_group_distance() -> None:
+    """Cultural similarity should come directly from configured group distance."""
+    distances = {(1, 2): 0.25}
+
+    assert calculate_cultural_similarity(1, 1, distances) == pytest.approx(1.0)
+    assert calculate_cultural_similarity(1, 2, distances) == pytest.approx(0.75)
 
 
 def test_calculate_income_similarity_reflects_relative_difference() -> None:
@@ -40,8 +49,8 @@ def test_calculate_income_similarity_reflects_relative_difference() -> None:
 
 
 def test_calculate_total_similarity_combines_culture_and_income() -> None:
-    """Total similarity should average cultural and income components."""
-    similarity = calculate_total_similarity([0.0, 0.0], [0.0, 0.0], 1.0, 0.5)
+    """Total similarity should currently use only cultural similarity."""
+    similarity = calculate_total_similarity(1, 2, 1.0, 0.5, {(1, 2): 0.25})
 
     assert similarity == pytest.approx(0.75)
 

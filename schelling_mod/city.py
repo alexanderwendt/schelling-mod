@@ -18,7 +18,19 @@ class City:
 
     def set_map(self, city_map: np.ndarray) -> None:
         """Set the raw city map."""
-        self.raw_map = city_map
+        self.raw_map = np.array(city_map, copy=True)
+        self.apply_cross_street_layout()
+
+    def apply_cross_street_layout(self) -> None:
+        """Partition the map into four blocks using a cross-shaped street."""
+        if self.raw_map is None:
+            return
+
+        row_count, col_count = self.raw_map.shape
+        center_row = row_count // 2
+        center_col = col_count // 2
+        self.raw_map[center_row, :] = -1
+        self.raw_map[:, center_col] = -1
 
     def generate_map(
         self,
@@ -42,6 +54,7 @@ class City:
         raw_map = np.random.default_rng(0).choice(races, size=city_size, p=probabilities)
         edge_length = int(np.sqrt(city_size))
         self.raw_map = np.reshape(raw_map, (edge_length, edge_length))
+        self.apply_cross_street_layout()
 
     def instantiate_city(
         self,
@@ -58,6 +71,16 @@ class City:
         for (i, j), value in np.ndenumerate(self.raw_map):
             team_id = self.raw_map[i][j].item()
             location_multiplier = utils.calculate_location_multiplier(i, j, row_count, col_count)
+
+            if team_id == -1:
+                self.city[i][j] = Feature(
+                    FeatureType.BARRIER,
+                    [i, j],
+                    agent=None,
+                    location_multiplier=location_multiplier,
+                    property_value=0.0,
+                )
+                continue
 
             if team_id != 0:
                 threshold_mean, threshold_std = similarity_threshold_distributions[team_id]
@@ -87,7 +110,9 @@ class City:
         """Return a map containing the current team ids."""
         current_team_map = np.zeros(self.raw_map.shape, dtype=int)
         for (i, j), value in np.ndenumerate(self.raw_map):
-            if self.city[i][j].agent is not None:
+            if self.city[i][j].type == FeatureType.BARRIER:
+                current_team_map[i][j] = -1
+            elif self.city[i][j].agent is not None:
                 current_team_map[i][j] = self.city[i][j].agent.team_id
             else:
                 current_team_map[i][j] = 0
@@ -111,35 +136,48 @@ class City:
         """Return Moore-neighborhood occupied house features."""
         return self.get_neighbors(row, col, 1)
 
-    def get_random_empty_house_position(self) -> list[int] | None:
-        """Return the position of a random empty house."""
-        empty_houses = []
-        for (i, j), value in np.ndenumerate(self.city):
-            feature = self.city[i, j]
-            if feature.type == FeatureType.HOUSE and feature.agent is None:
-                empty_houses.append([i, j])
+    def get_best_sampled_empty_house_position(
+        self,
+        agent: Agent,
+        n_neighbors: int,
+        pairwise_multipliers: Mapping[tuple[int, int], float] | None = None,
+        sample_size: int = 10,
+        require_affordable: bool = False,
+    ) -> list[int] | None:
+        """Sample random cells and return the best valid empty house for the agent."""
+        row_count, col_count = self.city.shape
+        total_cells = row_count * col_count
+        candidate_count = min(sample_size, total_cells)
+        sampled_indices = np.random.choice(total_cells, size=candidate_count, replace=False)
 
-        if not empty_houses:
-            return None
+        best_position = None
+        best_score = None
+        best_property_value = None
 
-        return empty_houses[np.random.choice(len(empty_houses))]
+        for flat_index in sampled_indices:
+            row, col = np.unravel_index(flat_index, self.city.shape)
+            feature = self.city[row, col]
+            if feature.type != FeatureType.HOUSE or feature.agent is not None:
+                continue
+            if require_affordable and not agent.can_afford(feature.property_value):
+                continue
 
-    def get_affordable_empty_house_positions(self, agent: Agent) -> list[list[int]]:
-        """Return all empty house positions affordable for the given agent."""
-        affordable_houses = []
-        for (i, j), feature in np.ndenumerate(self.city):
-            if feature.type == FeatureType.HOUSE and feature.agent is None and agent.can_afford(feature.property_value):
-                affordable_houses.append([i, j])
+            neighborhood = self.get_neighbors(row, col, n_neighbors)
+            score = agent.get_similarity_ratio(neighborhood, pairwise_multipliers)
 
-        return affordable_houses
+            if (
+                best_position is None
+                or score > best_score
+                or (
+                    score == best_score
+                    and feature.property_value < best_property_value
+                )
+            ):
+                best_position = [row, col]
+                best_score = score
+                best_property_value = feature.property_value
 
-    def get_random_affordable_empty_house_position(self, agent: Agent) -> list[int] | None:
-        """Return a random affordable empty house position, if any."""
-        affordable_houses = self.get_affordable_empty_house_positions(agent)
-        if not affordable_houses:
-            return None
-
-        return affordable_houses[np.random.choice(len(affordable_houses))]
+        return best_position
 
     def recalculate_property_values(self) -> None:
         """Recompute property values for all houses."""

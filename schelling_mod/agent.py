@@ -48,22 +48,26 @@ class Agent:
     def get_similarity_ratio(
         self,
         neighborhood: list,
-        pairwise_multipliers: Mapping[tuple[int, int], float] | None = None,
+        pairwise_distances: Mapping[tuple[int, int], float] | None = None,
     ) -> float:
         """Return the average similarity to neighboring agents."""
         if neighborhood:
             similarity_ratio = np.average(
                 [
-                    utils.calculate_total_similarity(
-                        self.mental_values,
-                        neighbor.agent.mental_values,
-                        self.income,
-                        neighbor.agent.income,
-                        distance_multiplier=utils.get_pairwise_cultural_multiplier(
+                    (
+                        utils.CULTURAL_SIMILARITY_WEIGHT
+                        * utils.calculate_cultural_similarity(
                             self.team_id,
                             neighbor.agent.team_id,
-                            pairwise_multipliers,
-                        ),
+                            pairwise_distances,
+                        )
+                    )
+                    + (
+                        utils.INCOME_SIMILARITY_WEIGHT
+                        * utils.calculate_income_similarity(
+                            self.income,
+                            neighbor.agent.income,
+                        )
                     )
                     for neighbor in neighborhood
                 ]
@@ -90,8 +94,7 @@ class Agent:
         )
 
     def __repr__(self) -> str:
-        rounded_values = [str(round(num, 1)) for num in self.mental_values]
         return (
             f"Agent(team={self.team_id}, id={self.agent_id}, tau={self.similarity_threshold:.2f}, "
-            f"income={self.income:.2f}, val={rounded_values})"
+            f"income={self.income:.2f})"
         )

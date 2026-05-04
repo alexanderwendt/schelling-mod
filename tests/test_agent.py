@@ -46,7 +46,7 @@ def test_agent_is_unhappy_when_similarity_below_threshold() -> None:
     )
     neighborhood = [make_neighbor(team_id=2, values=[0.2, 0.2])]
 
-    assert bool(agent.is_unhappy(neighborhood, house_value=1.0))
+    assert bool(agent.is_unhappy(neighborhood, house_value=1.0, pairwise_multipliers={(1, 2): 0.2}))
 
 
 def test_agent_similarity_ratio_matches_neighbor_average() -> None:
@@ -64,7 +64,7 @@ def test_agent_similarity_ratio_matches_neighbor_average() -> None:
         make_neighbor(team_id=2, values=[0.2, 0.2]),
     ]
 
-    assert agent.get_similarity_ratio(neighborhood) == pytest.approx(0.9292893219)
+    assert agent.get_similarity_ratio(neighborhood, {(1, 2): 0.2}) == pytest.approx(0.9)
 
 
 def test_agent_is_unhappy_when_house_is_not_affordable() -> None:
@@ -81,8 +81,8 @@ def test_agent_is_unhappy_when_house_is_not_affordable() -> None:
     assert bool(agent.is_unhappy([], house_value=15.0))
 
 
-def test_agent_similarity_uses_pairwise_multiplier() -> None:
-    """Cultural multipliers should reduce similarity for configured pairs."""
+def test_agent_similarity_uses_pairwise_cultural_distance() -> None:
+    """Cultural distances should reduce similarity for configured pairs."""
     agent = Agent(
         agent_id=1,
         team_id=1,
@@ -93,6 +93,6 @@ def test_agent_similarity_uses_pairwise_multiplier() -> None:
     )
     neighborhood = [make_neighbor(team_id=2, values=[0.2, 0.2])]
 
-    similarity = agent.get_similarity_ratio(neighborhood, {(1, 2): 2.0})
+    similarity = agent.get_similarity_ratio(neighborhood, {(1, 2): 0.6})
 
-    assert similarity == pytest.approx(0.7171572875)
+    assert similarity == pytest.approx(0.4)

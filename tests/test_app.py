@@ -6,6 +6,7 @@ import numpy as np
 
 from schelling_mod.app import build_parser
 from schelling_mod.app import build_default_streamlit_config
+from schelling_mod.app import build_selected_feature_details
 from schelling_mod.app import load_streamlit_config
 from schelling_mod.app import MENTAL_VALUES_MAP
 from schelling_mod.app import normalize_teams_distribution
@@ -89,6 +90,38 @@ def test_normalize_teams_distribution_returns_unit_sum() -> None:
     assert sum(distribution.values()) == 1.0
 
 
+def test_selected_feature_details_show_last_action_without_internal_ids() -> None:
+    """Selected-cell details should hide internal ids and show the latest action."""
+    schelling = Schelling(
+        size=4,
+        empty_ratio=0.75,
+        n_neighbors=1,
+        load_map=False,
+        races=2,
+        teams_distribution={1: 1.0, 2: 0.0},
+        similarity_threshold_distributions={1: (0.2, 0.0), 2: (0.2, 0.0)},
+        income_distributions={1: (1.0, 0.0), 2: (1.0, 0.0)},
+        pairwise_cultural_multipliers={(1, 2): 0.0},
+    )
+    schelling.city.set_map(np.array([[1, 0], [0, 0]]))
+    schelling.city.instantiate_city(
+        MENTAL_VALUES_MAP,
+        agent_values_std=0.0,
+        similarity_threshold_distributions={1: (0.2, 0.0), 2: (0.2, 0.0)},
+        income_distributions={1: (1.0, 0.0), 2: (1.0, 0.0)},
+    )
+    agent_id = schelling.city.city[0, 0].agent.agent_id
+    schelling.last_agent_actions[agent_id] = "Happy. Stayed in place."
+
+    details = build_selected_feature_details(schelling, 0, 0)
+    properties = {row["Property"] for row in details}
+    values = {row["Property"]: row["Value"] for row in details}
+
+    assert "Agent ID" not in properties
+    assert "Team ID" not in properties
+    assert values["Last action"] == "Happy. Stayed in place."
+
+
 def test_schelling_run_moves_agent_only_into_affordable_house() -> None:
     """Unhappy agents should move only to affordable empty houses."""
     schelling = Schelling(
@@ -100,7 +133,7 @@ def test_schelling_run_moves_agent_only_into_affordable_house() -> None:
         teams_distribution={1: 1.0, 2: 0.0},
         similarity_threshold_distributions={1: (0.2, 0.0), 2: (0.2, 0.0)},
         income_distributions={1: (1.0, 0.0), 2: (1.0, 0.0)},
-        pairwise_cultural_multipliers={(1, 2): 1.0},
+        pairwise_cultural_multipliers={(1, 2): 0.0},
     )
     schelling.city.set_map(np.array([[1, 0], [0, 0]]))
     schelling.city.instantiate_city(
@@ -163,7 +196,7 @@ def test_schelling_run_ignores_house_cost_when_property_values_are_disabled() ->
         teams_distribution={1: 0.5, 2: 0.5},
         similarity_threshold_distributions={1: (0.1, 0.0), 2: (0.1, 0.0)},
         income_distributions={1: (1.0, 0.0), 2: (1.0, 0.0)},
-        pairwise_cultural_multipliers={(1, 2): 1.0},
+        pairwise_cultural_multipliers={(1, 2): 0.0},
         property_values_enabled=False,
     )
     schelling.city.set_map(np.array([[1, 0], [2, 2]]))
