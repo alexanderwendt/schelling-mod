@@ -77,6 +77,29 @@ class Agent:
 
         return similarity_ratio
 
+    def get_satisfaction_score(
+        self,
+        neighborhood: list,
+        pairwise_distances: Mapping[tuple[int, int], float] | None = None,
+        neighborhood_capacity: int = 0,
+        density_preference_enabled: bool = False,
+        density_preference_weight: float = 0.1,
+    ) -> float:
+        """Return similarity adjusted by an optional preference for occupied neighbors."""
+        similarity_ratio = self.get_similarity_ratio(neighborhood, pairwise_distances)
+        if not density_preference_enabled:
+            return similarity_ratio
+
+        if neighborhood_capacity <= 0:
+            occupancy_ratio = 0.0
+        else:
+            occupancy_ratio = len(neighborhood) / neighborhood_capacity
+
+        return (
+            ((1 - density_preference_weight) * similarity_ratio)
+            + (density_preference_weight * occupancy_ratio)
+        )
+
     def can_afford(self, house_value: float) -> bool:
         """Return whether the agent can afford a given house value."""
         return house_value <= utils.calculate_affordability_limit(self.income)

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import numpy as np
 import streamlit as st
 from matplotlib.colors import BoundaryNorm, ListedColormap
@@ -60,6 +61,7 @@ PAIRWISE_CULTURAL_MULTIPLIERS = {
     (1, 3): 1.5,
     (2, 3): 2.5,
 }
+DENSITY_PREFERENCE_WEIGHT = 0.1
 CELL_COLORS = ["black", "white", "red", "royalblue", "green"]
 TEAM_COLORS = {1: "red", 2: "royalblue", 3: "green"}
 CONFIG_FILE_PATH = Path("schelling_streamlit_config.json")
@@ -81,10 +83,12 @@ class Schelling:
         income_distributions: Mapping[int, tuple[float, float]] | None = None,
         pairwise_cultural_multipliers: Mapping[tuple[int, int], float] | None = None,
         property_values_enabled: bool = True,
+        density_preference_enabled: bool = True,
     ):
         self.races = np.arange(races + 1)
         self.n_neighbors = n_neighbors
         self.property_values_enabled = property_values_enabled
+        self.density_preference_enabled = density_preference_enabled
         self.last_agent_actions: dict[int, str] = {}
         self.similarity_threshold_distributions = (
             similarity_threshold_distributions or SIMILARITY_THRESHOLD_DISTRIBUTIONS
@@ -154,13 +158,16 @@ class Schelling:
             if feature.type == FeatureType.HOUSE and feature.agent is not None:
                 current_agent: Agent = feature.agent
                 neighborhood = self.city.get_neighbors(row, col, self.n_neighbors)
-                similarity_ratio = current_agent.get_similarity_ratio(
+                satisfaction_score = current_agent.get_satisfaction_score(
                     neighborhood,
                     self.pairwise_cultural_multipliers,
+                    self.city.get_neighborhood_capacity(row, col, self.n_neighbors),
+                    self.density_preference_enabled,
+                    DENSITY_PREFERENCE_WEIGHT,
                 )
-                agent_log_line = self.format_feature_for_log(feature, similarity_ratio)
+                agent_log_line = self.format_feature_for_log(feature, satisfaction_score)
                 neighborhood_log = self.format_neighborhood_for_log(neighborhood)
-                is_socially_unhappy = similarity_ratio < current_agent.similarity_threshold
+                is_socially_unhappy = satisfaction_score < current_agent.similarity_threshold
                 must_move_for_affordability = (
                     self.property_values_enabled
                     and not current_agent.can_afford(feature.property_value)
@@ -178,12 +185,16 @@ class Schelling:
                             self.n_neighbors,
                             self.pairwise_cultural_multipliers,
                             require_affordable=True,
+                            density_preference_enabled=self.density_preference_enabled,
+                            density_preference_weight=DENSITY_PREFERENCE_WEIGHT,
                         )
                     else:
                         chosen_house_position = self.city.get_best_sampled_empty_house_position(
                             current_agent,
                             self.n_neighbors,
                             self.pairwise_cultural_multipliers,
+                            density_preference_enabled=self.density_preference_enabled,
+                            density_preference_weight=DENSITY_PREFERENCE_WEIGHT,
                         )
                     if chosen_house_position is not None:
                         self.city.city[chosen_house_position[0], chosen_house_position[1]].agent = (
@@ -292,6 +303,7 @@ def build_default_streamlit_config() -> dict[str, Any]:
             "n_neighbors": N_NEIGHBORS,
             "n_iterations": 10,
             "property_values_enabled": True,
+            "density_preference_enabled": True,
         },
         "teams": {
             str(team_id): {
@@ -428,6 +440,15 @@ def build_property_value_map(city: City) -> np.ndarray:
             property_value_map[row, col] = feature.property_value
 
     return property_value_map
+
+
+def build_barrier_mask(city: City) -> np.ndarray:
+    """Return a mask for street and barrier cells."""
+    barrier_mask = np.zeros(city.city.shape, dtype=bool)
+    for (row, col), feature in np.ndenumerate(city.city):
+        barrier_mask[row, col] = feature.type == FeatureType.BARRIER
+
+    return barrier_mask
 
 
 def build_income_map(city: City) -> np.ndarray:
@@ -632,13 +653,25 @@ def plot_simulation_state(
 
     property_axis.axis("off")
     property_axis.set_title("Property Value", fontsize=12)
-    property_mesh = property_axis.pcolor(
+    property_values = np.ma.masked_array(
         build_property_value_map(schelling.city),
-        cmap="viridis",
+        mask=build_barrier_mask(schelling.city),
+    )
+    property_cmap = plt.get_cmap("viridis").copy()
+    property_cmap.set_bad("black")
+    property_mesh = property_axis.pcolor(
+        property_values,
+        cmap=property_cmap,
         edgecolors="w",
         linewidths=1,
     )
     figure.colorbar(property_mesh, ax=property_axis, fraction=0.046, pad=0.03)
+    property_axis.legend(
+        handles=[mpatches.Patch(facecolor="white", edgecolor="black", label="Street")],
+        loc="lower left",
+        fontsize=8,
+        frameon=True,
+    )
 
     similarity_axis.set_xlabel("Iterations")
     similarity_axis.set_xlim([0, n_iterations + 1])
@@ -698,6 +731,10 @@ def run_streamlit_app(args) -> None:
         "Use Property Values",
         value=parse_bool(simulation_config["property_values_enabled"], True),
     )
+    density_preference_enabled = st.sidebar.checkbox(
+        "Prefer More Neighbors",
+        value=parse_bool(simulation_config.get("density_preference_enabled"), True),
+    )
     (
         teams_distribution,
         similarity_threshold_distributions,
@@ -712,6 +749,7 @@ def run_streamlit_app(args) -> None:
             "n_neighbors": n_neighbors,
             "n_iterations": n_iterations,
             "property_values_enabled": property_values_enabled,
+            "density_preference_enabled": density_preference_enabled,
         },
         "teams": team_config["teams"],
         "pairwise_cultural_multipliers": team_config["pairwise_cultural_multipliers"],
@@ -734,6 +772,7 @@ def run_streamlit_app(args) -> None:
             income_distributions=income_distributions,
             pairwise_cultural_multipliers=pairwise_cultural_multipliers,
             property_values_enabled=property_values_enabled,
+            density_preference_enabled=density_preference_enabled,
         )
         st.session_state.mean_similarity_ratio = [
             st.session_state.schelling.city.get_mean_similarity_ratio(
@@ -790,12 +829,14 @@ def run_streamlit_app(args) -> None:
         {
             "Metric": [
                 "Property values active",
+                "Density preference active",
                 "Mean similarity",
                 "Mean property value",
                 "Mean resident income",
             ],
             "Value": [
                 "active" if property_values_enabled else "inactive",
+                "active" if density_preference_enabled else "inactive",
                 f"{mean_similarity_ratio[-1]:.4f}",
                 f"{float(np.mean(build_property_value_map(schelling.city))):.4f}",
                 f"{get_mean_resident_income(schelling.city):.4f}",
@@ -804,7 +845,34 @@ def run_streamlit_app(args) -> None:
         hide_index=True,
     )
 
-    if st.sidebar.button("Run Simulation"):
+    if st.sidebar.button("Run Simulation", use_container_width=True):
+        save_streamlit_config(current_config)
+        st.session_state.loaded_streamlit_config = current_config
+
+        schelling = Schelling(
+            population_size,
+            empty_ratio,
+            n_neighbors,
+            False,
+            len(MENTAL_VALUES_MAP),
+            MENTAL_VALUES_STD_DEV,
+            teams_distribution,
+            similarity_threshold_distributions=similarity_threshold_distributions,
+            income_distributions=income_distributions,
+            pairwise_cultural_multipliers=pairwise_cultural_multipliers,
+            property_values_enabled=property_values_enabled,
+            density_preference_enabled=density_preference_enabled,
+        )
+        mean_similarity_ratio = [
+            schelling.city.get_mean_similarity_ratio(
+                n_neighbors,
+                schelling.pairwise_cultural_multipliers,
+            )
+        ]
+        st.session_state.schelling = schelling
+        st.session_state.mean_similarity_ratio = mean_similarity_ratio
+        st.session_state.schelling_config_signature = config_signature
+
         completed_iterations = 0
         for i in range(n_iterations):
             all_agents_happy = schelling.run()

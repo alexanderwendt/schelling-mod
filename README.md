@@ -12,6 +12,7 @@ This project extends a Schelling-style segregation model with:
 - pairwise cultural distance between groups
 - per-group income distributions
 - property values derived from neighborhood income
+- location multipliers that peak in the map center and decrease toward the edges
 - affordability-constrained movement
 - a cross-shaped street layout that partitions the city into four blocks
 
@@ -142,7 +143,8 @@ limit is reached.
 ### What the frontend shows
 
 - `Teams`: occupancy map of groups and empty houses. Streets are shown in black.
-- `Property Value`: house-value heatmap based on neighboring incomes and fixed location multipliers.
+- `Property Value`: house-value heatmap based on neighboring incomes and center-weighted location multipliers. Streets
+  are shown in black and excluded from the color scale.
 - `Mean Similarity Ratio`: chart of the aggregate similarity measure over simulation iterations.
 - `Selected Cell`: detailed view for one map cell, including type, value, location multiplier, and agent information.
 - `Metrics Table`: current summary values such as mean similarity, mean property value, and mean resident income.
@@ -227,6 +229,38 @@ When disabled:
 
 - property values are still displayed, but affordability is not used to force or restrict movement
 - movement decisions are based only on social similarity
+
+#### `Prefer More Neighbors`
+
+- Type: checkbox
+- Meaning: enables a slight preference for locations with more occupied neighboring houses
+
+When enabled:
+
+- the agent satisfaction score combines social similarity with a small neighborhood-density component
+- sampled movement destinations with more occupied neighbors are favored when they are otherwise socially suitable
+- empty neighboring cells lower the density component, but streets are excluded from the neighborhood capacity
+
+When disabled:
+
+- satisfaction and movement scoring use social similarity only
+
+How it is calculated:
+
+```text
+density_ratio = occupied_neighbor_count / possible_non_street_neighbor_count
+satisfaction_score = (0.9 * social_similarity) + (0.1 * density_ratio)
+```
+
+The preference strength is fixed at `0.1`, so neighborhood density contributes `10%` of the satisfaction score and
+social similarity contributes `90%`.
+
+In practical terms:
+
+- if two locations have similar social fit, the agent will slightly prefer the one with more occupied neighbors
+- a fully occupied neighborhood can add up to `0.1` to the score compared with a completely empty neighborhood
+- the effect is intentionally weaker than group similarity and should not dominate cultural-distance settings
+- streets do not count as empty cells; they are excluded from the denominator
 
 ### Team Parameters section
 
@@ -331,6 +365,7 @@ The current model includes:
 - social similarity based on group-to-group cultural distance
 - optional economic pressure through house affordability
 - cross-shaped streets that permanently divide the city into four blocks
+- optional density preference for occupied neighboring cells
 - movement based on sampling `10` random cells and choosing the best valid destination
 
 When an agent must move:

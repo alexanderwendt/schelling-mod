@@ -132,6 +132,20 @@ class City:
 
         return neighborhood
 
+    def get_neighborhood_capacity(self, row: int, col: int, n_neighbors: int) -> int:
+        """Return the number of non-barrier neighbor cells around a position."""
+        capacity = 0
+        for i in range(row - n_neighbors, row + n_neighbors + 1):
+            for j in range(col - n_neighbors, col + n_neighbors + 1):
+                is_in_bounds = 0 <= i < self.city.shape[0] and 0 <= j < self.city.shape[1]
+                if not is_in_bounds or [i, j] == [row, col]:
+                    continue
+
+                if self.city[i, j].type != FeatureType.BARRIER:
+                    capacity += 1
+
+        return capacity
+
     def get_immediate_neighbors(self, row: int, col: int) -> list:
         """Return Moore-neighborhood occupied house features."""
         return self.get_neighbors(row, col, 1)
@@ -143,6 +157,8 @@ class City:
         pairwise_multipliers: Mapping[tuple[int, int], float] | None = None,
         sample_size: int = 10,
         require_affordable: bool = False,
+        density_preference_enabled: bool = False,
+        density_preference_weight: float = 0.1,
     ) -> list[int] | None:
         """Sample random cells and return the best valid empty house for the agent."""
         row_count, col_count = self.city.shape
@@ -163,7 +179,13 @@ class City:
                 continue
 
             neighborhood = self.get_neighbors(row, col, n_neighbors)
-            score = agent.get_similarity_ratio(neighborhood, pairwise_multipliers)
+            score = agent.get_satisfaction_score(
+                neighborhood,
+                pairwise_multipliers,
+                self.get_neighborhood_capacity(row, col, n_neighbors),
+                density_preference_enabled,
+                density_preference_weight,
+            )
 
             if (
                 best_position is None

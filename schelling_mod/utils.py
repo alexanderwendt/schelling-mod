@@ -117,11 +117,17 @@ def calculate_location_multiplier(
     row_count: int,
     col_count: int,
 ) -> float:
-    """Return a deterministic multiplier in the configured location range."""
-    max_row = max(row_count - 1, 1)
-    max_col = max(col_count - 1, 1)
-    row_factor = row / max_row
-    col_factor = col / max_col
-    normalized_position = (row_factor + col_factor) / 2
+    """Return the highest location multiplier at the map center."""
+    center_row = (row_count - 1) / 2
+    center_col = (col_count - 1) / 2
+    max_distance = max(
+        np.linalg.norm([0 - center_row, 0 - center_col]),
+        np.linalg.norm([0 - center_row, (col_count - 1) - center_col]),
+        np.linalg.norm([(row_count - 1) - center_row, 0 - center_col]),
+        np.linalg.norm([(row_count - 1) - center_row, (col_count - 1) - center_col]),
+        1.0,
+    )
+    distance_from_center = np.linalg.norm([row - center_row, col - center_col])
+    normalized_position = 1 - min(distance_from_center / max_distance, 1.0)
     span = LOCATION_MULTIPLIER_MAX - LOCATION_MULTIPLIER_MIN
     return LOCATION_MULTIPLIER_MIN + (span * normalized_position)

@@ -1,15 +1,16 @@
 {
   "pairwise_cultural_multipliers": {
-    "1-2": 1.2,
-    "1-3": 1.0,
-    "2-3": 1.0
+    "1-2": 0.0,
+    "1-3": 0.0,
+    "2-3": 0.0
   },
   "simulation": {
+    "density_preference_enabled": true,
     "empty_ratio": 0.23,
     "n_iterations": 50,
     "n_neighbors": 1,
-    "population_size": 90,
-    "property_values_enabled": false
+    "population_size": 654,
+    "property_values_enabled": true
   },
   "teams": {
     "1": {
