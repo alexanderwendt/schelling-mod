@@ -150,6 +150,28 @@ class City:
         """Return Moore-neighborhood occupied house features."""
         return self.get_neighbors(row, col, 1)
 
+    def get_property_value_inputs(self, row: int, col: int) -> list[float]:
+        """Return occupied neighbor incomes or location fallback for empty houses."""
+        values = []
+        location_multiplier = self.city[row, col].location_multiplier
+
+        for i in range(row - 1, row + 2):
+            for j in range(col - 1, col + 2):
+                is_in_bounds = 0 <= i < self.city.shape[0] and 0 <= j < self.city.shape[1]
+                if not is_in_bounds or [i, j] == [row, col]:
+                    continue
+
+                feature = self.city[i, j]
+                if feature.type != FeatureType.HOUSE:
+                    continue
+
+                if feature.agent is not None:
+                    values.append(feature.agent.income)
+                else:
+                    values.append(location_multiplier)
+
+        return values
+
     def get_best_sampled_empty_house_position(
         self,
         agent: Agent,
@@ -161,6 +183,31 @@ class City:
         density_preference_weight: float = 0.1,
     ) -> list[int] | None:
         """Sample random cells and return the best valid empty house for the agent."""
+        best_candidate = self.get_best_sampled_empty_house_candidate(
+            agent,
+            n_neighbors,
+            pairwise_multipliers,
+            sample_size,
+            require_affordable,
+            density_preference_enabled,
+            density_preference_weight,
+        )
+        if best_candidate is None:
+            return None
+
+        return best_candidate["position"]
+
+    def get_best_sampled_empty_house_candidate(
+        self,
+        agent: Agent,
+        n_neighbors: int,
+        pairwise_multipliers: Mapping[tuple[int, int], float] | None = None,
+        sample_size: int = 10,
+        require_affordable: bool = False,
+        density_preference_enabled: bool = False,
+        density_preference_weight: float = 0.1,
+    ) -> dict[str, float | int | list[int]] | None:
+        """Sample random cells and return the best valid empty house candidate."""
         row_count, col_count = self.city.shape
         total_cells = row_count * col_count
         candidate_count = min(sample_size, total_cells)
@@ -169,6 +216,7 @@ class City:
         best_position = None
         best_score = None
         best_property_value = None
+        best_neighbor_count = None
 
         for flat_index in sampled_indices:
             row, col = np.unravel_index(flat_index, self.city.shape)
@@ -182,24 +230,40 @@ class City:
             score = agent.get_satisfaction_score(
                 neighborhood,
                 pairwise_multipliers,
-                self.get_neighborhood_capacity(row, col, n_neighbors),
+                self.get_neighborhood_capacity(row, col, 1),
                 density_preference_enabled,
                 density_preference_weight,
+                len(self.get_immediate_neighbors(row, col)),
             )
+            neighbor_count = len(self.get_immediate_neighbors(row, col))
 
             if (
                 best_position is None
                 or score > best_score
                 or (
-                    score == best_score
+                    np.isclose(score, best_score)
+                    and neighbor_count > best_neighbor_count
+                )
+                or (
+                    np.isclose(score, best_score)
+                    and neighbor_count == best_neighbor_count
                     and feature.property_value < best_property_value
                 )
             ):
                 best_position = [row, col]
                 best_score = score
                 best_property_value = feature.property_value
+                best_neighbor_count = neighbor_count
 
-        return best_position
+        if best_position is None:
+            return None
+
+        return {
+            "position": best_position,
+            "score": best_score,
+            "neighbor_count": best_neighbor_count,
+            "property_value": best_property_value,
+        }
 
     def recalculate_property_values(self) -> None:
         """Recompute property values for all houses."""
@@ -207,13 +271,8 @@ class City:
             if feature.type != FeatureType.HOUSE:
                 continue
 
-            neighboring_incomes = [
-                neighbor.agent.income
-                for neighbor in self.get_immediate_neighbors(row, col)
-                if neighbor.agent is not None
-            ]
             feature.property_value = utils.calculate_property_value(
-                neighboring_incomes,
+                self.get_property_value_inputs(row, col),
                 feature.location_multiplier,
             )
 

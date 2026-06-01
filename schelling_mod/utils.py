@@ -4,12 +4,11 @@ from collections.abc import Mapping
 
 import numpy as np
 
-DEFAULT_PROPERTY_VALUE = 1.0
-HOUSING_COST_RATIO = 0.6
+HOUSING_COST_RATIO = 0.5
 INCOME_YEARS = 20
+DEFAULT_PROPERTY_VALUE = INCOME_YEARS * HOUSING_COST_RATIO
 LOCATION_MULTIPLIER_MIN = 0.5
 LOCATION_MULTIPLIER_MAX = 1.5
-PROPERTY_VALUE_FACTOR = 0.5
 CULTURAL_SIMILARITY_WEIGHT = 1.0
 INCOME_SIMILARITY_WEIGHT = 0.0
 
@@ -95,20 +94,20 @@ def calculate_total_similarity(
 
 def calculate_affordability_limit(income: float) -> float:
     """Return the maximum affordable house value for an agent."""
-    return HOUSING_COST_RATIO * INCOME_YEARS * income
+    return DEFAULT_PROPERTY_VALUE * income
 
 
 def calculate_property_value(
-    neighboring_incomes: list[float],
+    neighborhood_values: list[float],
     location_multiplier: float,
 ) -> float:
-    """Return a house value based on neighborhood income and location."""
-    if neighboring_incomes:
-        base_value = PROPERTY_VALUE_FACTOR * INCOME_YEARS * float(np.mean(neighboring_incomes))
+    """Return the capitalized value of neighborhood income or location value."""
+    if neighborhood_values:
+        mean_value = float(np.mean(neighborhood_values))
     else:
-        base_value = DEFAULT_PROPERTY_VALUE
+        mean_value = location_multiplier
 
-    return base_value * location_multiplier
+    return DEFAULT_PROPERTY_VALUE * mean_value
 
 
 def calculate_location_multiplier(

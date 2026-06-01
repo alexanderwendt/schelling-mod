@@ -4,6 +4,8 @@ import json
 
 import numpy as np
 
+from schelling_mod.feature import Feature
+from schelling_mod.feature import FeatureType
 from schelling_mod.app import build_parser
 from schelling_mod.app import build_default_streamlit_config
 from schelling_mod.app import build_selected_feature_details
@@ -212,6 +214,52 @@ def test_schelling_run_ignores_house_cost_when_property_values_are_disabled() ->
 
     assert schelling.city.city[0, 0].agent is not None
     assert schelling.city.city[0, 0].agent.team_id == 1
+
+
+def test_schelling_run_moves_to_equal_score_house_with_more_neighbors(monkeypatch) -> None:
+    """Satisfied agents should move to equal-score sampled houses with more neighbors."""
+    schelling = Schelling(
+        size=4,
+        empty_ratio=0.75,
+        n_neighbors=1,
+        load_map=False,
+        races=2,
+        teams_distribution={1: 1.0, 2: 0.0},
+        similarity_threshold_distributions={1: (0.2, 0.0), 2: (0.2, 0.0)},
+        income_distributions={1: (1.0, 0.0), 2: (1.0, 0.0)},
+        pairwise_cultural_multipliers={(1, 2): 1.0},
+        property_values_enabled=False,
+        density_preference_enabled=False,
+    )
+    moving_agent = schelling.city.city[0, 0].agent
+    schelling.city.city = np.array(
+        [
+            [
+                Feature(FeatureType.HOUSE, [0, 0], moving_agent),
+                Feature(FeatureType.HOUSE, [0, 1], None),
+            ],
+        ],
+        dtype=object,
+    )
+
+    def equal_score_candidate(*args, **kwargs) -> dict[str, float | int | list[int]]:
+        return {
+            "position": [0, 1],
+            "score": 1.0,
+            "neighbor_count": 1,
+            "property_value": 10.0,
+        }
+
+    monkeypatch.setattr(
+        schelling.city,
+        "get_best_sampled_empty_house_candidate",
+        equal_score_candidate,
+    )
+
+    schelling.run()
+
+    assert schelling.city.city[0, 0].agent is None
+    assert schelling.city.city[0, 1].agent is moving_agent
 
 
 def test_schelling_run_allows_unaffordable_move_when_property_values_are_disabled() -> None:

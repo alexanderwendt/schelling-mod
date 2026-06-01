@@ -11,7 +11,7 @@ This project extends a Schelling-style segregation model with:
 - per-group similarity-threshold distributions
 - pairwise cultural distance between groups
 - per-group income distributions
-- property values derived from neighborhood income
+- property values derived from neighborhood income and center-weighted location multipliers
 - location multipliers that peak in the map center and decrease toward the edges
 - affordability-constrained movement
 - a cross-shaped street layout that partitions the city into four blocks
@@ -22,6 +22,61 @@ The frontend shows:
 - a property-value map
 - a mean-similarity chart
 - detailed information for a selected cell
+
+## Economic Model
+
+The model separates two price mechanisms.
+
+First, each house has a location multiplier. This follows the intuition of the Alonso-Muth-Mills urban model: central
+locations are more valuable because they are closer to the city center. In this simulation, the multiplier is highest in
+the map center and declines with distance toward the edges.
+
+Second, each house has an endogenous neighborhood-income component. This follows the gentrification mechanism described
+by Guerrieri, Hartley, and Hurst: when higher-income residents move into or near a neighborhood, their presence can bid
+up nearby property prices and create displacement pressure for lower-income residents.
+
+The implemented property-value formula uses a default capitalized value:
+
+```text
+Dval = MultiplyYear * IncomeShare
+Dval = 20 * 0.5 = 10
+```
+
+Each house also has an intrinsic location multiplier `ival` in the range `[0.5, 1.5]`. In capitalized value units this
+corresponds to `[5, 15]`, because `Dval * ival` gives the location fallback value. Central cells have higher `ival`;
+edge cells have lower `ival`.
+
+For property prices, each non-street immediate neighbor slot contributes one value:
+
+```text
+occupied neighbor slot = neighbor income
+empty neighbor slot = ival
+property_value = Dval * mean(neighbor income or ival)
+```
+
+Streets are excluded. If there are no usable neighboring house slots, the house uses its own `ival` as the mean value.
+
+The model therefore represents two effects:
+
+- valuable central land is more expensive through the empty-slot location fallback
+- high-income residents moving into an area raise nearby property values over time
+
+Affordability is checked against the final `property_value`:
+
+```text
+afford_value = Dval * income
+affordable if afford_value >= property_value
+```
+
+For an agent with `income = 1.0`, `afford_value = 10`. If an agent cannot afford its current house, it must move; when
+property values are enabled, it may only move to an affordable empty house.
+
+Examples:
+
+- `ival = 1.5`, all neighbors occupied with income `1.0`: `mean = 1.0`, `property_value = 10`
+- `ival = 1.5`, 50% neighbors occupied with income `1.0`: `mean = 1.25`, `property_value = 12.5`
+- `ival = 0.5`, all neighbors occupied with income `1.0`: `mean = 1.0`, `property_value = 10`
+- `ival = 0.5`, 50% neighbors occupied with income `1.0`: `mean = 0.75`, `property_value = 7.5`
 
 ## Credits
 
@@ -225,6 +280,27 @@ When enabled:
 - an agent must move if it cannot afford its current house
 - an agent may only move to an affordable empty house
 
+Property values are based on occupied neighbor incomes and intrinsic location value for empty neighboring houses:
+
+```text
+Dval = 20 * 0.5 = 10
+occupied neighbor slot = neighbor income
+empty neighbor slot = location multiplier ival
+property_value = Dval * mean(neighbor income or ival)
+afford_value = Dval * income
+```
+
+The factor `0.5` represents half of income being available as rent. The factor `20` converts annual rent into a
+capitalized property value. The location multiplier `ival` ranges from `0.5` at low-value edge locations to `1.5` at
+high-value central locations. Streets are excluded from the calculation.
+
+Examples:
+
+- `ival = 1.5`, all neighbors occupied with income `1.0`: `property_value = 10`
+- `ival = 1.5`, 50% neighbors occupied with income `1.0`: `property_value = 12.5`
+- `ival = 0.5`, all neighbors occupied with income `1.0`: `property_value = 10`
+- `ival = 0.5`, 50% neighbors occupied with income `1.0`: `property_value = 7.5`
+
 When disabled:
 
 - property values are still displayed, but affordability is not used to force or restrict movement
@@ -237,9 +313,10 @@ When disabled:
 
 When enabled:
 
-- the agent satisfaction score combines social similarity with a small neighborhood-density component
-- sampled movement destinations with more occupied neighbors are favored when they are otherwise socially suitable
-- empty neighboring cells lower the density component, but streets are excluded from the neighborhood capacity
+- the agent satisfaction score combines social similarity with a small immediate-neighbor density component
+- sampled movement destinations with more occupied nearest neighbors are favored when they are otherwise socially suitable
+- only the first ring of neighbors is used for this preference, even if `Neighborhood Radius` is larger
+- empty nearest-neighbor cells lower the density component, but streets are excluded from the capacity
 
 When disabled:
 
@@ -248,7 +325,7 @@ When disabled:
 How it is calculated:
 
 ```text
-density_ratio = occupied_neighbor_count / possible_non_street_neighbor_count
+density_ratio = occupied_nearest_neighbor_count / possible_non_street_nearest_neighbor_count
 satisfaction_score = (0.9 * social_similarity) + (0.1 * density_ratio)
 ```
 
@@ -257,10 +334,10 @@ social similarity contributes `90%`.
 
 In practical terms:
 
-- if two locations have similar social fit, the agent will slightly prefer the one with more occupied neighbors
-- a fully occupied neighborhood can add up to `0.1` to the score compared with a completely empty neighborhood
+- if two locations have similar social fit, the agent will slightly prefer the one with more occupied nearest neighbors
+- a fully occupied nearest-neighbor ring can add up to `0.1` to the score compared with a completely empty ring
 - the effect is intentionally weaker than group similarity and should not dominate cultural-distance settings
-- streets do not count as empty cells; they are excluded from the denominator
+- streets do not count as empty cells; they are excluded from the nearest-neighbor denominator
 
 ### Team Parameters section
 
@@ -387,4 +464,11 @@ Practical recommendation:
 
 ## Literature
 
-To read: https://www.sciencedirect.com/science/article/pii/S0264275124000520
+- Guerrieri, Hartley, and Hurst, "Endogenous Gentrification and Housing Price Dynamics":
+  https://www.nber.org/papers/w16237
+- Journal version, "Endogenous gentrification and housing price dynamics":
+  https://www.sciencedirect.com/science/article/pii/S0047272713000297
+- Alonso-Muth-Mills model overview:
+  https://www.rba.gov.au/publications/rdp/2011/2011-03/alonso-muth-mills-model.html
+- Additional reading:
+  https://www.sciencedirect.com/science/article/pii/S0264275124000520

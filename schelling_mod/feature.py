@@ -19,7 +19,7 @@ class Feature:
         position: list[int],
         agent=None,
         location_multiplier: float = 1.0,
-        property_value: float = 1.0,
+        property_value: float = 10.0,
     ):
         self.type = feature_type
         self.agent = agent

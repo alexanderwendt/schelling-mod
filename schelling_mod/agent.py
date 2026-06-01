@@ -84,6 +84,7 @@ class Agent:
         neighborhood_capacity: int = 0,
         density_preference_enabled: bool = False,
         density_preference_weight: float = 0.1,
+        occupied_neighbor_count: int | None = None,
     ) -> float:
         """Return similarity adjusted by an optional preference for occupied neighbors."""
         similarity_ratio = self.get_similarity_ratio(neighborhood, pairwise_distances)
@@ -93,7 +94,12 @@ class Agent:
         if neighborhood_capacity <= 0:
             occupancy_ratio = 0.0
         else:
-            occupancy_ratio = len(neighborhood) / neighborhood_capacity
+            occupied_count = (
+                len(neighborhood)
+                if occupied_neighbor_count is None
+                else occupied_neighbor_count
+            )
+            occupancy_ratio = occupied_count / neighborhood_capacity
 
         return (
             ((1 - density_preference_weight) * similarity_ratio)

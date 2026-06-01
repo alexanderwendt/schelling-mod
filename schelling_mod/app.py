@@ -62,6 +62,7 @@ PAIRWISE_CULTURAL_MULTIPLIERS = {
     (2, 3): 2.5,
 }
 DENSITY_PREFERENCE_WEIGHT = 0.1
+EMPTY_HOUSE_SAMPLE_SIZE = 10
 CELL_COLORS = ["black", "white", "red", "royalblue", "green"]
 TEAM_COLORS = {1: "red", 2: "royalblue", 3: "green"}
 CONFIG_FILE_PATH = Path("schelling_streamlit_config.json")
@@ -161,12 +162,14 @@ class Schelling:
                 satisfaction_score = current_agent.get_satisfaction_score(
                     neighborhood,
                     self.pairwise_cultural_multipliers,
-                    self.city.get_neighborhood_capacity(row, col, self.n_neighbors),
+                    self.city.get_neighborhood_capacity(row, col, 1),
                     self.density_preference_enabled,
                     DENSITY_PREFERENCE_WEIGHT,
+                    len(self.city.get_immediate_neighbors(row, col)),
                 )
                 agent_log_line = self.format_feature_for_log(feature, satisfaction_score)
                 neighborhood_log = self.format_neighborhood_for_log(neighborhood)
+                current_neighbor_count = len(self.city.get_immediate_neighbors(row, col))
                 is_socially_unhappy = satisfaction_score < current_agent.similarity_threshold
                 must_move_for_affordability = (
                     self.property_values_enabled
@@ -177,25 +180,32 @@ class Schelling:
                 else:
                     is_unhappy = is_socially_unhappy
 
-                if is_unhappy:
+                chosen_house_candidate = None
+                should_move_for_neighbors = False
+                should_sample_destination = is_unhappy or not must_move_for_affordability
+                if should_sample_destination:
+                    chosen_house_candidate = self.city.get_best_sampled_empty_house_candidate(
+                        current_agent,
+                        self.n_neighbors,
+                        self.pairwise_cultural_multipliers,
+                        sample_size=EMPTY_HOUSE_SAMPLE_SIZE,
+                        require_affordable=self.property_values_enabled,
+                        density_preference_enabled=self.density_preference_enabled,
+                        density_preference_weight=DENSITY_PREFERENCE_WEIGHT,
+                    )
+                    if chosen_house_candidate is not None:
+                        should_move_for_neighbors = (
+                            np.isclose(chosen_house_candidate["score"], satisfaction_score)
+                            and chosen_house_candidate["neighbor_count"] > current_neighbor_count
+                        )
+
+                if is_unhappy or should_move_for_neighbors:
                     all_agents_happy = False
-                    if self.property_values_enabled:
-                        chosen_house_position = self.city.get_best_sampled_empty_house_position(
-                            current_agent,
-                            self.n_neighbors,
-                            self.pairwise_cultural_multipliers,
-                            require_affordable=True,
-                            density_preference_enabled=self.density_preference_enabled,
-                            density_preference_weight=DENSITY_PREFERENCE_WEIGHT,
-                        )
-                    else:
-                        chosen_house_position = self.city.get_best_sampled_empty_house_position(
-                            current_agent,
-                            self.n_neighbors,
-                            self.pairwise_cultural_multipliers,
-                            density_preference_enabled=self.density_preference_enabled,
-                            density_preference_weight=DENSITY_PREFERENCE_WEIGHT,
-                        )
+                    chosen_house_position = (
+                        chosen_house_candidate["position"]
+                        if chosen_house_candidate is not None
+                        else None
+                    )
                     if chosen_house_position is not None:
                         self.city.city[chosen_house_position[0], chosen_house_position[1]].agent = (
                             feature.agent
@@ -211,6 +221,8 @@ class Schelling:
                             reasons.append("socially unhappy")
                         if must_move_for_affordability:
                             reasons.append("cannot afford current house")
+                        if should_move_for_neighbors:
+                            reasons.append("same score with more neighbors")
                         decision_log = (
                             f"{' and '.join(reasons)}. Moved from [{row}, {col}] to "
                             f"[{chosen_house_position[0]}, {chosen_house_position[1]}]"
@@ -626,20 +638,20 @@ def plot_simulation_state(
 ) -> Figure:
     """Plot current city state and summary metrics."""
     plt.style.use("ggplot")
-    figure, axes = plt.subplots(
-        1,
+    figure = plt.figure(figsize=(16, 6), constrained_layout=True)
+    grid = figure.add_gridspec(
         3,
-        figsize=(16, 4.5),
-        gridspec_kw={
-            "width_ratios": [1.0, 1.15, 1.35],
-            "wspace": 0.45,
-        },
-        constrained_layout=True,
+        3,
+        width_ratios=[1.5, 1.0, 1.0],
+        height_ratios=[0.15, 1.0, 0.15],
+        wspace=0.25,
     )
-
-    teams_axis, property_axis, similarity_axis = axes
+    teams_axis = figure.add_subplot(grid[:, 0])
+    property_axis = figure.add_subplot(grid[1, 1])
+    similarity_axis = figure.add_subplot(grid[1, 2])
 
     teams_axis.axis("off")
+    teams_axis.set_box_aspect(1)
     teams_axis.set_title("Teams", fontsize=12)
     cmap = ListedColormap(CELL_COLORS)
     norm = BoundaryNorm(np.arange(-0.5, len(CELL_COLORS) + 0.5, 1), cmap.N)
