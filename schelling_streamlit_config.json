@@ -1,16 +1,71 @@
 {
+  "config_version": 1,
+  "cultural_distances": {
+    "1-2": 1.0,
+    "1-3": 1.2,
+    "2-3": 1.8
+  },
+  "economics": {
+    "affordability_enabled": true
+  },
+  "export": {
+    "output_dir": null
+  },
+  "group_count": 3,
+  "groups": [
+    {
+      "color": "#ff0000",
+      "id": 1,
+      "income_mean": 1.2,
+      "income_std": 0.0,
+      "name": "Knights",
+      "population_share": 0.7,
+      "threshold_mean": 0.5,
+      "threshold_std": 0.0
+    },
+    {
+      "color": "#4169e1",
+      "id": 2,
+      "income_mean": 1.5,
+      "income_std": 0.0,
+      "name": "Elves",
+      "population_share": 0.2,
+      "threshold_mean": 0.5,
+      "threshold_std": 0.0
+    },
+    {
+      "color": "#008000",
+      "id": 3,
+      "income_mean": 1.0,
+      "income_std": 0.0,
+      "name": "Orcs",
+      "population_share": 0.1,
+      "threshold_mean": 0.5,
+      "threshold_std": 0.0
+    }
+  ],
+  "movement": {
+    "dissatisfied_move_probability": 1.0,
+    "mode": "best_sampled",
+    "movement_search_radius": null,
+    "require_satisfied_destination": false,
+    "sample_size": 10,
+    "satisfied_move_probability": 0.0
+  },
   "pairwise_cultural_multipliers": {
     "1-2": 1.0,
     "1-3": 1.2,
     "2-3": 1.8
   },
   "simulation": {
-    "density_preference_enabled": false,
+    "density_preference_enabled": true,
     "empty_ratio": 0.25,
     "n_iterations": 50,
     "n_neighbors": 2,
+    "neighborhood_type": "moore",
     "population_size": 1447,
-    "property_values_enabled": true
+    "property_values_enabled": true,
+    "seed": 0
   },
   "teams": {
     "1": {

@@ -163,3 +163,7 @@ cython_debug/
 
 # Local Streamlit parameter persistence
 schelling_streamlit_config.json
+
+.opencode/
+/.opencode_bak/
+/issues/

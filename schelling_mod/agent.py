@@ -10,9 +10,14 @@ from . import utils
 log = logging.getLogger(__name__)
 
 
-def generate_values_from_distribution(mean_value, std_dev) -> np.ndarray:
+def generate_values_from_distribution(
+    mean_value,
+    std_dev,
+    rng: np.random.Generator | None = None,
+) -> np.ndarray:
     """Generate a two-dimensional value vector from a normal distribution."""
-    return np.random.normal(loc=mean_value, scale=std_dev, size=(2,))
+    generator = rng or np.random.default_rng()
+    return generator.normal(loc=mean_value, scale=std_dev, size=(2,))
 
 
 class Agent:
@@ -26,6 +31,7 @@ class Agent:
         mental_values_std_dev: float,
         similarity_threshold: float,
         income: float,
+        rng: np.random.Generator | None = None,
     ):
         log.info(
             "Init agent with agentId: %s, teamId: %s, mental_values: %s, std: %s, threshold: %s, income: %s",
@@ -41,6 +47,7 @@ class Agent:
         self.mental_values = generate_values_from_distribution(
             mental_values_mean,
             mental_values_std_dev,
+            rng,
         )
         self.similarity_threshold = similarity_threshold
         self.income = income

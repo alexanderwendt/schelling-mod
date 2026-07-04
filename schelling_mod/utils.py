@@ -13,9 +13,14 @@ CULTURAL_SIMILARITY_WEIGHT = 1.0
 INCOME_SIMILARITY_WEIGHT = 0.0
 
 
-def sample_normal_value(mean_value: float, std_dev: float) -> float:
+def sample_normal_value(
+    mean_value: float,
+    std_dev: float,
+    rng: np.random.Generator | None = None,
+) -> float:
     """Sample a non-negative scalar from a normal distribution."""
-    return max(0.0, float(np.random.normal(loc=mean_value, scale=std_dev)))
+    generator = rng or np.random.default_rng()
+    return max(0.0, float(generator.normal(loc=mean_value, scale=std_dev)))
 
 
 def calculate_similarity_to_neighbor(

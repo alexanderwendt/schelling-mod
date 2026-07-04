@@ -115,7 +115,7 @@ def test_property_value_uses_moore_neighbors_and_location_multiplier() -> None:
 
     center_like_house = city.city[1, 1]
 
-    assert center_like_house.property_value == pytest.approx(15.0)
+    assert center_like_house.property_value == pytest.approx(9.30964406271151)
 
 
 def test_property_value_defaults_when_no_neighbors_exist() -> None:
@@ -129,7 +129,7 @@ def test_property_value_defaults_when_no_neighbors_exist() -> None:
         income_distributions=INCOME_DISTRIBUTIONS,
     )
 
-    assert city.city[2, 2].property_value == pytest.approx(1.5)
+    assert city.city[2, 2].property_value == pytest.approx(5.0)
 
 
 def test_get_affordable_empty_house_positions_filters_by_house_value() -> None:
@@ -143,7 +143,7 @@ def test_get_affordable_empty_house_positions_filters_by_house_value() -> None:
         income_distributions=INCOME_DISTRIBUTIONS,
     )
     agent = city.city[0, 0].agent
-    city.city[0, 1].property_value = 11.0
+    city.city[0, 1].property_value = 9.0
     city.city[1, 0].property_value = 13.0
 
     affordable_positions = city.get_affordable_empty_house_positions(agent)

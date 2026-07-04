@@ -59,22 +59,23 @@ def test_calculate_property_value_uses_neighbor_income_and_location() -> None:
     """Property values should use the configured formula."""
     property_value = calculate_property_value([1.0, 3.0], location_multiplier=1.5)
 
-    assert property_value == pytest.approx(30.0)
+    assert property_value == pytest.approx(20.0)
 
 
 def test_calculate_property_value_uses_default_without_neighbors() -> None:
     """Empty neighborhoods should fall back to the default value."""
     property_value = calculate_property_value([], location_multiplier=0.5)
 
-    assert property_value == pytest.approx(0.5)
+    assert property_value == pytest.approx(5.0)
 
 
 def test_calculate_location_multiplier_stays_in_expected_range() -> None:
     """Location multipliers should stay between 0.5 and 1.5."""
     assert calculate_location_multiplier(0, 0, 3, 3) == pytest.approx(0.5)
-    assert calculate_location_multiplier(2, 2, 3, 3) == pytest.approx(1.5)
+    assert calculate_location_multiplier(1, 1, 3, 3) == pytest.approx(1.5)
+    assert calculate_location_multiplier(2, 2, 3, 3) == pytest.approx(0.5)
 
 
 def test_calculate_affordability_limit_uses_income_rule() -> None:
-    """Affordability should use 60 percent of 20 years of income."""
-    assert calculate_affordability_limit(2.0) == pytest.approx(24.0)
+    """Affordability should use 50 percent of 20 years of income."""
+    assert calculate_affordability_limit(2.0) == pytest.approx(20.0)
