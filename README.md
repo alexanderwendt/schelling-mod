@@ -1,6 +1,7 @@
 # schelling-mod
 
-Modified version of Schelling's segregation simulator with a Streamlit frontend and additional economic dynamics.
+Modified Schelling segregation simulator with a Streamlit frontend, configurable group dynamics, movement rules, and
+economic housing constraints.
 
 ![System Overview](doc/images/Overview.png)
 
@@ -8,20 +9,99 @@ Modified version of Schelling's segregation simulator with a Streamlit frontend 
 
 This project extends a Schelling-style segregation model with:
 
-- per-group similarity-threshold distributions
-- pairwise cultural distance between groups
-- per-group income distributions
-- property values derived from neighborhood income and center-weighted location multipliers
-- location multipliers that peak in the map center and decrease toward the edges
-- affordability-constrained movement
-- a cross-shaped street layout that partitions the city into four blocks
+- configurable 2-5 groups with editable names, colors, population shares, similarity thresholds, and incomes
+- default LOTR-inspired group names: `Knights`, `Elves`, `Orcs`, `Dwarves`, `Hobbits`
+- pairwise cultural distance between groups, shown in the UI as `<Group A> - <Group B> cultural distance`
+- Moore and von Neumann neighborhoods
+- cross-shaped street/barrier cells that partition the map into four blocks
+- multiple movement modes: `random_empty`, `first_acceptable`, `best_sampled`, `best_available`, `limited_distance`
+- movement probabilities for dissatisfied and satisfied agents
+- movement sample size, optional movement search radius, and optional satisfied-destination requirement
+- seeded random number generation for reproducible maps, sampled attributes, and movement choices
+- property values, affordability constraints, and optional density preference
+- Streamlit exports for per-run `metrics.csv` and `config.json`
 
-The frontend shows:
+## Model Features
 
-- a teams map
-- a property-value map
-- a mean-similarity chart
-- detailed information for a selected cell
+### Groups
+
+Runs support 2-5 active groups. Each group has:
+
+- `name`
+- `color`
+- `population_share`
+- `threshold_mean`
+- `threshold_std`
+- `income_mean`
+- `income_std`
+
+Population shares are normalized internally, so they do not need to sum exactly to `1.0` or `100%`.
+
+### Cultural distance
+
+Every active pair of groups has one cultural-distance value. The UI labels these controls as:
+
+```text
+<Group A> - <Group B> cultural distance
+```
+
+The current cultural-similarity formula is:
+
+```text
+cultural_similarity = max(0, 1 - cultural_distance)
+```
+
+Same-group distance is treated as `0`. Distance `0.0` means full similarity, distance `1.0` means zero similarity, and
+values above `1.0` remain clamped at zero similarity.
+
+### Neighborhoods and streets
+
+Neighborhood radius is configurable from `1` to `5` in Streamlit.
+
+- `moore`: Chebyshev distance; square neighborhood around the cell.
+- `von_neumann`: Manhattan distance; diamond neighborhood around the cell.
+
+Generated maps receive a cross-shaped street/barrier through the center row and center column. Streets are displayed in
+black, cannot be occupied, are excluded from neighborhood capacity and property-value inputs, and count as barriers. In
+the current implementation they do not block line-of-sight or movement across streets.
+
+### Movement
+
+The movement mode controls how empty destinations are selected:
+
+- `random_empty`: choose a random valid empty house.
+- `first_acceptable`: scan randomized candidates and pick the first destination meeting the agent threshold.
+- `best_sampled`: sample up to `sample_size` empty houses and choose the best by satisfaction score.
+- `best_available`: evaluate all empty houses and choose the best; blocked in Streamlit/CLI when too many empty cells
+  would make exhaustive search expensive.
+- `limited_distance`: like `best_sampled`, but candidates are constrained to a Manhattan search radius. If no radius is
+  configured, the neighborhood radius is used.
+
+Movement parameters:
+
+- `sample_size`: maximum sampled destinations for sampled modes.
+- `movement_search_radius`: optional Manhattan radius for destination search.
+- `dissatisfied_move_probability`: probability that an unhappy agent attempts movement.
+- `satisfied_move_probability`: probability that a happy agent makes an exploratory move.
+- `require_satisfied_destination`: reject destinations whose score is below the moving agent's threshold.
+
+When affordability is enabled, destination candidates must also be affordable.
+
+### Random seed reproducibility
+
+The `seed` value initializes NumPy's random generator. With the same config and seed, map generation, threshold and
+income samples, random candidate sampling, and tie-breaking movement choices are reproducible.
+
+### Density preference
+
+When density preference is enabled, satisfaction combines cultural similarity with local occupied-neighbor density:
+
+```text
+satisfaction_score = (0.9 * social_similarity) + (0.1 * density_ratio)
+density_ratio = occupied_neighbor_count / possible_non_street_neighbor_count
+```
+
+When disabled, satisfaction uses social similarity only.
 
 ## Economic Model
 
@@ -56,11 +136,6 @@ property_value = Dval * mean(neighbor income or ival)
 
 Streets are excluded. If there are no usable neighboring house slots, the house uses its own `ival` as the mean value.
 
-The model therefore represents two effects:
-
-- valuable central land is more expensive through the empty-slot location fallback
-- high-income residents moving into an area raise nearby property values over time
-
 Affordability is checked against the final `property_value`:
 
 ```text
@@ -68,8 +143,8 @@ afford_value = Dval * income
 affordable if afford_value >= property_value
 ```
 
-For an agent with `income = 1.0`, `afford_value = 10`. If an agent cannot afford its current house, it must move; when
-property values are enabled, it may only move to an affordable empty house.
+For an agent with `income = 1.0`, `afford_value = 10`. If affordability constraints are enabled, an agent that cannot
+afford its current house is unhappy and may only move to an affordable empty house.
 
 Examples:
 
@@ -78,16 +153,97 @@ Examples:
 - `ival = 0.5`, all neighbors occupied with income `1.0`: `mean = 1.0`, `property_value = 10`
 - `ival = 0.5`, 50% neighbors occupied with income `1.0`: `mean = 0.75`, `property_value = 7.5`
 
-## Credits
+## Streamlit Frontend
 
-This project is based on the Streamlit Schelling simulator from
-https://github.com/adilmoujahid/streamlit-schelling.
+Run the app:
 
-Thanks to Adil Moujahid. Blog: https://adilmoujahid.com/.
+```powershell
+conda activate schelling311
+streamlit run main.py
+```
+
+Sidebar sections:
+
+- `Population / groups`: population size, empty-house ratio, and group definitions.
+- `Group definitions`: group count, name, color, population share, threshold mean/std dev, and income mean/std dev.
+- `Preferences / cultural distance`: pairwise cultural distance sliders.
+- `Run settings`: iteration count and random seed.
+- `Neighborhoods`: radius and `moore` / `von_neumann` type.
+- `Movement`: mode, sample size, search radius, movement probabilities, and satisfied-destination requirement.
+- `Economics / attractiveness`: affordability constraints and density preference.
+- `Export`: download controls after a run.
+
+Main page sections:
+
+- group map with empty houses and street/barrier legend
+- property-value heatmap
+- mean-similarity chart
+- selected-cell inspector for row/column details
+- current configuration JSON expander
+- summary metrics table
+- export buttons for `metrics.csv` and `config.json` after a run
+
+The app loads initial values from `schelling_streamlit_config.json` if present and saves the active configuration when a
+simulation is run.
+
+## CLI Usage
+
+Run the command-line simulation:
+
+```powershell
+conda activate schelling311
+python main.py --run_simulation
+```
+
+Load a versioned config JSON:
+
+```powershell
+python main.py --run_simulation --config-json path/to/config.json
+```
+
+Current CLI arguments:
+
+- `--config-json`
+- `--population_size`, `--population-size`
+- `--empty_ratio`, `--empty-ratio`
+- `--threshold_std_dev`
+- `--iterations`
+- `--seed`
+- `--neighborhood-radius`
+- `--neighborhood-type {moore,von_neumann}`
+- `--movement-mode {random_empty,first_acceptable,best_sampled,best_available,limited_distance}`
+- `--sample-size`
+- `--movement-search-radius`
+- `--dissatisfied-move-probability`
+- `--satisfied-move-probability`
+- `--affordability` / `--no-affordability`
+- `--density-preference` / `--no-density-preference`
+- `--output-dir`
+
+When `--output-dir` is set, CLI runs write `metrics.csv` and `config.json` to that directory. The simulation stops early
+in both CLI and Streamlit mode if all agents are satisfied before the configured iteration limit is reached.
+
+Example:
+
+```powershell
+python main.py --run_simulation --population-size 2500 --empty-ratio 0.2 --iterations 10 --seed 42 \
+  --neighborhood-type von_neumann --movement-mode limited_distance --movement-search-radius 4 --output-dir runs/example
+```
+
+## Metrics and Exports
+
+Each metric row includes run id, iteration, satisfaction percentage, mean similarity, mean satisfaction score, move
+count, convergence iteration, affordability failures, displacement distance metrics, segregation indexes, and
+attractiveness exposure metrics.
+
+Exports:
+
+- Streamlit: download `metrics.csv` and `config.json` after running.
+- CLI: write `metrics.csv` and `config.json` when `--output-dir` is provided.
 
 ## Python Version
 
-This project targets Python `3.14`.
+This project targets Python `3.11`.
 
 ## Project Structure
 
@@ -101,8 +257,13 @@ schelling-mod/
 │   ├── agent.py
 │   ├── app.py
 │   ├── city.py
+│   ├── config.py
+│   ├── export.py
 │   ├── feature.py
+│   ├── metrics.py
+│   ├── movement.py
 │   └── utils.py
+├── tests/
 ├── environment.yml
 ├── main.py
 ├── pyproject.toml
@@ -110,10 +271,14 @@ schelling-mod/
 └── requirements.txt
 ```
 
-- `schelling_mod/` contains the simulation and UI code.
-- `main.py` is the main entry point for Streamlit and CLI use.
-- `environment.yml` defines the conda environment.
-- `requirements.txt` contains direct Python dependencies.
+- `schelling_mod/agent.py`: agent satisfaction, similarity, and affordability.
+- `schelling_mod/city.py`: grid generation, street layout, neighborhoods, movement candidate selection, property values.
+- `schelling_mod/config.py`: versioned config defaults, migration, groups, movement modes, neighborhood types.
+- `schelling_mod/movement.py`: movement mode constants and movement stats.
+- `schelling_mod/metrics.py`: per-iteration metric rows and indexes.
+- `schelling_mod/export.py`: `metrics.csv` and `config.json` export helpers.
+- `schelling_mod/app.py`: Streamlit UI and CLI orchestration.
+- `main.py`: compatibility entry point for Streamlit and CLI use.
 
 ## Installation
 
@@ -121,346 +286,23 @@ schelling-mod/
 
 The repository is configured for a conda environment named `schelling311`.
 
-Create or update the environment:
-
 ```powershell
 conda env update -f environment.yml --prune
-```
-
-Activate it:
-
-```powershell
 conda activate schelling311
-```
-
-Optional editable install:
-
-```powershell
 python -m pip install -e .
 ```
 
-Use the editable install if you want the package metadata registered in the environment while continuing to work on the
-local source tree.
-
 ### Option 2: Pip only
-
-If you do not want to use conda:
 
 ```powershell
 python -m pip install -r requirements.txt
 python -m pip install -e .
 ```
 
-## How To Run
-
-### Run the Streamlit frontend
-
-```powershell
-conda activate schelling311
-streamlit run main.py
-```
-
-Streamlit will print a local URL, usually `http://localhost:8501`, and open the interface in your browser.
-
-### Run the command-line simulation
-
-```powershell
-conda activate schelling311
-python main.py --run_simulation
-```
-
-Optional CLI arguments:
-
-- `--population_size`
-- `--empty_ratio`
-- `--threshold_std_dev`
-- `--iterations`
-
-Example:
-
-```powershell
-conda activate schelling311
-python main.py --run_simulation --population_size 2500 --empty_ratio 0.2 --threshold_std_dev 0.05 --iterations 10
-```
-
-The simulation stops early in both CLI and Streamlit mode if all agents are satisfied before the configured iteration
-limit is reached.
-
-## How To Use The Frontend
-
-### Main workflow
-
-1. Start the app with `streamlit run main.py`.
-2. Adjust parameters in the left sidebar.
-3. Press `Run Simulation`.
-4. Inspect the updated maps, chart, summary table, and selected-cell details.
-
-### What the frontend shows
-
-- `Teams`: occupancy map of groups and empty houses. Streets are shown in black.
-- `Property Value`: house-value heatmap based on neighboring incomes and center-weighted location multipliers. Streets
-  are shown in black and excluded from the color scale.
-- `Mean Similarity Ratio`: chart of the aggregate similarity measure over simulation iterations.
-- `Selected Cell`: detailed view for one map cell, including type, value, location multiplier, and agent information.
-- `Metrics Table`: current summary values such as mean similarity, mean property value, and mean resident income.
-
-### How to inspect one location
-
-Use the `Row` and `Column` controls in `Selected Cell` to inspect a specific map position. The table shows:
-
-- position
-- feature type
-- property value
-- location multiplier
-- agent team, if occupied
-- last action, if the simulation has been run
-- similarity threshold
-- income
-
-## Frontend Parameters
-
-The sidebar is the main control surface. The app loads initial values from `schelling_streamlit_config.json` if that
-file exists. During normal interaction, the active settings live in Streamlit session state.
-
-### Simulation section
-
-#### `Population Size`
-
-- Type: slider
-- Range: `9` to `10000`
-- Meaning: requested number of cells before the square grid is built
-- Important detail: the model uses a square map, so the requested value is reduced to the nearest lower perfect square
-
-Examples:
-
-- `100` creates a `10 x 10` map
-- `90` creates an `9 x 9` map because `sqrt(90)` is truncated to `9`
-
-#### `Empty Houses Ratio`
-
-- Type: slider
-- Range: `0.0` to `1.0`
-- Meaning: fraction of house cells initialized without an agent
-- Higher value: more empty housing, more available movement destinations
-- Lower value: denser occupancy, fewer relocation options
-
-This ratio applies to house cells, not to street cells. Street cells are fixed barriers.
-
-#### `Neighborhood Radius`
-
-- Type: slider
-- Range: `1` to `5`
-- Meaning: radius used when computing neighborhood similarity
-
-Interpretation:
-
-- `1` means the immediate Moore neighborhood around a cell
-- larger values expand the square search area
-
-Higher values make each agent evaluate a broader local environment instead of only nearby adjacent cells.
-
-#### `Number of Iterations`
-
-- Type: integer input
-- Minimum: `1`
-- Meaning: maximum number of simulation steps to run when `Run Simulation` is pressed
-
-Important detail:
-
-- the simulation may stop earlier if everybody is satisfied
-
-#### `Use Property Values`
-
-- Type: checkbox
-- Meaning: enables the economic housing constraint
-
-When enabled:
-
-- houses have calculated property values
-- an agent must move if it cannot afford its current house
-- an agent may only move to an affordable empty house
-
-Property values are based on occupied neighbor incomes and intrinsic location value for empty neighboring houses:
-
-```text
-Dval = 20 * 0.5 = 10
-occupied neighbor slot = neighbor income
-empty neighbor slot = location multiplier ival
-property_value = Dval * mean(neighbor income or ival)
-afford_value = Dval * income
-```
-
-The factor `0.5` represents half of income being available as rent. The factor `20` converts annual rent into a
-capitalized property value. The location multiplier `ival` ranges from `0.5` at low-value edge locations to `1.5` at
-high-value central locations. Streets are excluded from the calculation.
-
-Examples:
-
-- `ival = 1.5`, all neighbors occupied with income `1.0`: `property_value = 10`
-- `ival = 1.5`, 50% neighbors occupied with income `1.0`: `property_value = 12.5`
-- `ival = 0.5`, all neighbors occupied with income `1.0`: `property_value = 10`
-- `ival = 0.5`, 50% neighbors occupied with income `1.0`: `property_value = 7.5`
-
-When disabled:
-
-- property values are still displayed, but affordability is not used to force or restrict movement
-- movement decisions are based only on social similarity
-
-#### `Prefer More Neighbors`
-
-- Type: checkbox
-- Meaning: enables a slight preference for locations with more occupied neighboring houses
-
-When enabled:
-
-- the agent satisfaction score combines social similarity with a small immediate-neighbor density component
-- sampled movement destinations with more occupied nearest neighbors are favored when they are otherwise socially suitable
-- only the first ring of neighbors is used for this preference, even if `Neighborhood Radius` is larger
-- empty nearest-neighbor cells lower the density component, but streets are excluded from the capacity
-
-When disabled:
-
-- satisfaction and movement scoring use social similarity only
-
-How it is calculated:
-
-```text
-density_ratio = occupied_nearest_neighbor_count / possible_non_street_nearest_neighbor_count
-satisfaction_score = (0.9 * social_similarity) + (0.1 * density_ratio)
-```
-
-The preference strength is fixed at `0.1`, so neighborhood density contributes `10%` of the satisfaction score and
-social similarity contributes `90%`.
-
-In practical terms:
-
-- if two locations have similar social fit, the agent will slightly prefer the one with more occupied nearest neighbors
-- a fully occupied nearest-neighbor ring can add up to `0.1` to the score compared with a completely empty ring
-- the effect is intentionally weaker than group similarity and should not dominate cultural-distance settings
-- streets do not count as empty cells; they are excluded from the nearest-neighbor denominator
-
-### Team Parameters section
-
-Each group has its own parameter block. The current groups are:
-
-- `Knights`
-- `Elves`
-- `Orcs`
-
-For each group, the following parameters can be set.
-
-#### `<Group> population share`
-
-- Type: numeric input
-- Range: `0.0` to `100.0`
-- Meaning: relative share of occupied houses assigned to that group during initialization
-
-Important detail:
-
-- the entered shares are normalized internally, so they do not have to sum to exactly `100`
-
-Example:
-
-- `70`, `20`, `10` produces a `70% / 20% / 10%` split
-- `7`, `2`, `1` produces the same normalized split
-
-#### `<Group> threshold mean`
-
-- Type: slider
-- Range: `0.0` to `1.0`
-- Meaning: mean of the similarity-threshold distribution for that group
-
-Interpretation:
-
-- higher values make the group more selective
-- lower values make the group easier to satisfy socially
-
-#### `<Group> threshold std dev`
-
-- Type: slider
-- Range: `0.0` to `0.5`
-- Meaning: standard deviation of the similarity-threshold distribution for that group
-
-Interpretation:
-
-- `0.0` means all agents in that group receive the same threshold
-- larger values create more within-group variation in tolerance
-
-#### `<Group> income mean`
-
-- Type: numeric input
-- Minimum: `0.0`
-- Meaning: mean of the income distribution for that group
-
-Interpretation:
-
-- higher values make members of the group able to afford more expensive houses
-- lower values reduce the affordability ceiling
-
-#### `<Group> income std dev`
-
-- Type: numeric input
-- Minimum: `0.0`
-- Meaning: standard deviation of the income distribution for that group
-
-Interpretation:
-
-- `0.0` gives the group a uniform income
-- larger values create within-group economic diversity
-
-### Cultural Distance section
-
-Each pair of groups has one cultural-distance parameter.
-
-#### `<Group A> - <Group B>`
-
-- Type: slider
-- Range: `0.0` to `5.0`
-- Meaning: pairwise cultural distance between two groups
-
-Interpretation:
-
-- lower values mean the two groups are treated as more similar
-- higher values mean they are treated as more different
-
-The implemented cultural similarity is:
-
-```text
-similarity = max(0, 1 - distance)
-```
-
-So:
-
-- distance `0.0` means full cultural similarity
-- distance `1.0` means zero cultural similarity
-- values above `1.0` are clamped effectively to zero similarity
-
-## Simulation Behavior
-
-The current model includes:
-
-- social similarity based on group-to-group cultural distance
-- optional economic pressure through house affordability
-- cross-shaped streets that permanently divide the city into four blocks
-- optional density preference for occupied neighboring cells
-- movement based on sampling `10` random cells and choosing the best valid destination
-
-When an agent must move:
-
-- it samples `10` random cells
-- only empty houses are considered
-- if property values are active, only affordable empty houses are considered
-- the best sampled destination is chosen by expected neighborhood similarity
-
 ## Requirements File Or YAML
 
 If you are using conda, `environment.yml` should be treated as the primary environment file because it defines the
-Python version and the installation path in one place.
-
-Practical recommendation:
-
-- use `environment.yml` for environment creation
-- keep `requirements.txt` for direct pip dependencies
+Python version and the installation path in one place. Keep `requirements.txt` for direct pip dependencies.
 
 ## Literature
 
@@ -472,3 +314,10 @@ Practical recommendation:
   https://www.rba.gov.au/publications/rdp/2011/2011-03/alonso-muth-mills-model.html
 - Additional reading:
   https://www.sciencedirect.com/science/article/pii/S0264275124000520
+
+## Credits
+
+This project is based on the Streamlit Schelling simulator from
+https://github.com/adilmoujahid/streamlit-schelling.
+
+Thanks to Adil Moujahid. Blog: https://adilmoujahid.com/.
